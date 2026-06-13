@@ -28,8 +28,6 @@ enum ScreenRecorderError: LocalizedError {
     }
 }
 
-// MARK: - Frame validation (required for manual AVAssetWriter path)
-
 private enum SCFrameValidator {
     static func isCompleteScreenFrame(_ sampleBuffer: CMSampleBuffer) -> Bool {
         guard sampleBuffer.isValid else { return false }
@@ -43,7 +41,20 @@ private enum SCFrameValidator {
     }
 }
 
-// MARK: - Rolling buffer segment writer
+private enum CapturePipeline {
+    static let writerQueue = DispatchQueue(label: "com.clippy.recorder.writer", qos: .userInitiated)
+
+    static func copySampleBuffer(_ sampleBuffer: CMSampleBuffer) -> CMSampleBuffer? {
+        var copy: CMSampleBuffer?
+        let status = CMSampleBufferCreateCopy(
+            allocator: kCFAllocatorDefault,
+            sampleBuffer: sampleBuffer,
+            sampleBufferOut: &copy
+        )
+        guard status == noErr else { return nil }
+        return copy
+    }
+}
 
 private enum SegmentAudioTrack {
     case system
@@ -54,24 +65,59 @@ private final class SegmentWriter: @unchecked Sendable {
     private var writer: AVAssetWriter?
     private var videoInput: AVAssetWriterInput?
     private var systemAudioInput: AVAssetWriterInput?
-    private var microphoneAudioInput: AVAssetWriterInput?
+    private var micAudioInput: AVAssetWriterInput?
     private var segmentURL: URL?
     private var segmentStartedAt = Date()
     private var hasStartedSession = false
     private var isFinalizing = false
     private var frameIndex: Int64 = 0
-    private var firstVideoPTS: CMTime?
-    private var firstSystemAudioPTS: CMTime?
-    private var firstMicrophoneAudioPTS: CMTime?
+    private var segmentMediaAnchor: CMTime?
     private var pausedForClip = false
     private var clipBoundaryWallTime: Date?
 
     private(set) var pendingFinalizationURLs: Set<URL> = []
     private(set) var currentSegmentURL: URL?
 
-    private var systemAudioSampleCount: Int64 = 0
-    private var microphoneAudioSampleCount: Int64 = 0
+    private var systemAudioWritten: Int64 = 0
+    private var micAudioWritten: Int64 = 0
+    private var micPacketsReceived: Int64 = 0
+    private var micCachedCount: Int64 = 0
+    private var audioDisabled = false
+    private var audioFailureCount = 0
+    private var systemAudioReceivedCount: Int64 = 0
+    private var micNormalizeFailCount: Int64 = 0
+    private var loggedSystemFormat = false
+    private var loggedMicFormat = false
+    private var loggedMicNormalizeFailure = false
+    private var lastWriterRecovery = Date.distantPast
+    private let writerRecoveryCooldown: TimeInterval = 2.0
     private let writeLock = NSLock()
+
+    private static let pcmAudioFormatHint: CMFormatDescription? = {
+        var asbd = AudioStreamBasicDescription(
+            mSampleRate: 48_000,
+            mFormatID: kAudioFormatLinearPCM,
+            mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked,
+            mBytesPerPacket: 8,
+            mFramesPerPacket: 1,
+            mBytesPerFrame: 8,
+            mChannelsPerFrame: 2,
+            mBitsPerChannel: 32,
+            mReserved: 0
+        )
+        var description: CMFormatDescription?
+        CMAudioFormatDescriptionCreate(
+            allocator: kCFAllocatorDefault,
+            asbd: &asbd,
+            layoutSize: 0,
+            layout: nil,
+            magicCookieSize: 0,
+            magicCookie: nil,
+            extensions: nil,
+            formatDescriptionOut: &description
+        )
+        return description
+    }()
 
     let segmentDuration: TimeInterval
     let captureFPS: Int
@@ -104,14 +150,21 @@ private final class SegmentWriter: @unchecked Sendable {
         segmentStartedAt = Date()
         hasStartedSession = false
         frameIndex = 0
-        firstVideoPTS = nil
-        firstSystemAudioPTS = nil
-        firstMicrophoneAudioPTS = nil
-        systemAudioSampleCount = 0
-        microphoneAudioSampleCount = 0
+        segmentMediaAnchor = nil
+        systemAudioWritten = 0
+        micAudioWritten = 0
+        micPacketsReceived = 0
+        micCachedCount = 0
+        audioDisabled = false
+        audioFailureCount = 0
+        systemAudioReceivedCount = 0
+        loggedSystemFormat = false
+        loggedMicFormat = false
+        loggedMicNormalizeFailure = false
+        micNormalizeFailCount = 0
         videoInput = nil
         systemAudioInput = nil
-        microphoneAudioInput = nil
+        micAudioInput = nil
 
         if let writer = try? AVAssetWriter(outputURL: url, fileType: .mov) {
             writer.shouldOptimizeForNetworkUse = false
@@ -142,11 +195,19 @@ private final class SegmentWriter: @unchecked Sendable {
         writeLock.lock()
         defer { writeLock.unlock() }
         processMicrophoneAudioLocked(sampleBuffer)
-        onMicrophoneSample?(sampleBuffer)
+        if let copy = CapturePipeline.copySampleBuffer(sampleBuffer) {
+            onMicrophoneSample?(copy)
+        }
     }
 
     var audioDiagnostics: String {
-        "systemAudioSamples=\(systemAudioSampleCount) micAudioSamples=\(microphoneAudioSampleCount)"
+        "systemAudioReceived=\(systemAudioReceivedCount) systemWritten=\(systemAudioWritten) " +
+        "micReceived=\(micPacketsReceived) micWritten=\(micAudioWritten) " +
+        "micCached=\(micCachedCount) micNormalizeFail=\(micNormalizeFailCount)"
+    }
+
+    func noteSystemAudioReceived() {
+        systemAudioReceivedCount += 1
     }
 
     private func processVideoLocked(_ sampleBuffer: CMSampleBuffer) {
@@ -154,7 +215,11 @@ private final class SegmentWriter: @unchecked Sendable {
         guard !pausedForClip else { return }
         guard SCFrameValidator.isCompleteScreenFrame(sampleBuffer) else { return }
         if writer == nil, !isFinalizing { openNewSegmentFile() }
-        guard let writer, !isFinalizing, writer.status != .failed else { return }
+        guard let writer, !isFinalizing else { return }
+        if writer.status == .failed {
+            recoverFromFailedWriter()
+            return
+        }
 
         if videoInput == nil {
             guard let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer) else { return }
@@ -181,21 +246,21 @@ private final class SegmentWriter: @unchecked Sendable {
             guard writer.canAdd(input) else { return }
             writer.add(input)
             videoInput = input
+            ensureAudioInputs(on: writer)
         }
+
+        let samplePTS = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        if segmentMediaAnchor == nil { segmentMediaAnchor = samplePTS }
 
         startSessionIfNeeded(on: writer)
 
-        guard let videoInput else { return }
-        var waitAttempts = 0
-        while !videoInput.isReadyForMoreMediaData, waitAttempts < 200 {
-            Thread.sleep(forTimeInterval: 0.003)
-            waitAttempts += 1
-        }
+        guard hasStartedSession else { return }
+
+        guard writer.status != .failed, let videoInput else { return }
+        if let systemAudioInput, !systemAudioInput.isReadyForMoreMediaData { return }
         guard videoInput.isReadyForMoreMediaData else { return }
 
-        let samplePTS = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-        if firstVideoPTS == nil { firstVideoPTS = samplePTS }
-        guard let base = firstVideoPTS,
+        guard let base = segmentMediaAnchor,
               let retimed = retimestampVideo(sampleBuffer, base: base) else { return }
         guard videoInput.append(retimed) else { return }
         frameIndex += 1
@@ -206,98 +271,219 @@ private final class SegmentWriter: @unchecked Sendable {
     }
 
     private func processSystemAudioLocked(_ sampleBuffer: CMSampleBuffer) {
-        guard processAudioLocked(sampleBuffer, track: .system) else { return }
-        systemAudioSampleCount += 1
+        guard !pausedForClip, !audioDisabled else { return }
+        guard isValidAudioSample(sampleBuffer) else { return }
+        logAudioFormatOnce(sampleBuffer, track: .system)
+        systemAudioReceivedCount += 1
+        guard let pcm = SegmentAudioConverter.normalizedPCM(from: sampleBuffer) else { return }
+        if appendPCM(pcm, from: sampleBuffer, to: .system) {
+            systemAudioWritten += 1
+        }
     }
 
     private func processMicrophoneAudioLocked(_ sampleBuffer: CMSampleBuffer) {
-        guard processAudioLocked(sampleBuffer, track: .microphone) else { return }
-        microphoneAudioSampleCount += 1
+        guard !pausedForClip, !audioDisabled else { return }
+        guard isValidAudioSample(sampleBuffer) else { return }
+        logAudioFormatOnce(sampleBuffer, track: .microphone)
+        micPacketsReceived += 1
+        guard let pcm = SegmentAudioConverter.normalizedPCM(from: sampleBuffer) else {
+            micNormalizeFailCount += 1
+            logMicNormalizeFailureOnce(sampleBuffer)
+            return
+        }
+        micCachedCount += 1
+        if appendPCM(pcm, from: sampleBuffer, to: .microphone) {
+            micAudioWritten += 1
+        }
     }
 
     var onMicrophoneSample: ((CMSampleBuffer) -> Void)?
 
     @discardableResult
-    private func processAudioLocked(_ sampleBuffer: CMSampleBuffer, track: SegmentAudioTrack) -> Bool {
+    private func appendPCM(
+        _ pcm: AVAudioPCMBuffer,
+        from sampleBuffer: CMSampleBuffer,
+        to track: SegmentAudioTrack
+    ) -> Bool {
         if let boundary = clipBoundaryWallTime, Date() >= boundary { return false }
-        guard !pausedForClip else { return false }
-        guard isValidAudioSample(sampleBuffer) else { return false }
-        // Never open a segment or start the writer from audio — video must initialize the file first.
-        guard writer != nil, hasStartedSession, videoInput != nil, !isFinalizing else { return false }
+        guard !pausedForClip, !audioDisabled else { return false }
+        guard writer != nil, videoInput != nil, !isFinalizing else { return false }
         guard let writer, writer.status != .failed else { return false }
+
+        startSessionIfNeeded(on: writer)
+        guard hasStartedSession, segmentMediaAnchor != nil else { return false }
 
         let input: AVAssetWriterInput?
         switch track {
-        case .system:
-            if systemAudioInput == nil {
-                systemAudioInput = makeAudioInput(for: sampleBuffer, writer: writer)
-            }
-            input = systemAudioInput
-        case .microphone:
-            if microphoneAudioInput == nil {
-                microphoneAudioInput = makeAudioInput(for: sampleBuffer, writer: writer)
-            }
-            input = microphoneAudioInput
+        case .system: input = systemAudioInput
+        case .microphone: input = micAudioInput
+        }
+        guard let input, input.isReadyForMoreMediaData else { return false }
+
+        guard let base = segmentMediaAnchor,
+              let copy = CapturePipeline.copySampleBuffer(sampleBuffer),
+              let retimed = retimestampAudio(copy, base: base) else {
+            return false
         }
 
-        guard let input else { return false }
+        let presentationTime = CMSampleBufferGetPresentationTimeStamp(retimed)
+        let frameCount = Int(pcm.frameLength)
+        let duration = CMTime(value: Int64(frameCount), timescale: 48_000)
 
-        var waitAttempts = 0
-        while !input.isReadyForMoreMediaData, waitAttempts < 200 {
-            Thread.sleep(forTimeInterval: 0.003)
-            waitAttempts += 1
+        guard let prepared = SegmentAudioConverter.makeSampleBuffer(
+            from: pcm,
+            presentationTime: presentationTime,
+            duration: duration
+        ) else {
+            return false
         }
-        guard input.isReadyForMoreMediaData else { return false }
 
-        let samplePTS = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        if input.append(prepared) {
+            audioFailureCount = 0
+            return true
+        }
+
+        audioFailureCount += 1
+        if audioFailureCount >= 30 {
+            disableAudio(reason: writer.error?.localizedDescription ?? "append failed")
+        }
+        return false
+    }
+
+    private func disableAudio(reason: String) {
+        guard !audioDisabled else { return }
+        audioDisabled = true
+        systemAudioInput?.markAsFinished()
+        micAudioInput?.markAsFinished()
+        systemAudioInput = nil
+        micAudioInput = nil
+        logSegment("Audio disabled: \(reason)")
+    }
+
+    private func logMicNormalizeFailureOnce(_ sampleBuffer: CMSampleBuffer) {
+        guard !loggedMicNormalizeFailure else { return }
+        loggedMicNormalizeFailure = true
+        guard let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer),
+              let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription) else {
+            logSegment("Mic normalize failed (no format description)")
+            return
+        }
+        let interleaved = (asbd.pointee.mFormatFlags & kAudioFormatFlagIsNonInterleaved) == 0
+        logSegment(
+            "Mic normalize failed — " +
+            "\(Int(asbd.pointee.mSampleRate))Hz ch=\(asbd.pointee.mChannelsPerFrame) " +
+            "bits=\(asbd.pointee.mBitsPerChannel) interleaved=\(interleaved) " +
+            "formatID=\(asbd.pointee.mFormatID) samples=\(CMSampleBufferGetNumSamples(sampleBuffer))"
+        )
+    }
+
+    private func logAudioFormatOnce(_ sampleBuffer: CMSampleBuffer, track: SegmentAudioTrack) {
         switch track {
-        case .system:
-            if firstSystemAudioPTS == nil { firstSystemAudioPTS = samplePTS }
-            guard let base = firstSystemAudioPTS,
-                  let retimed = retimestampAudio(sampleBuffer, base: base) else { return false }
-            return input.append(retimed)
-        case .microphone:
-            if firstMicrophoneAudioPTS == nil { firstMicrophoneAudioPTS = samplePTS }
-            guard let base = firstMicrophoneAudioPTS,
-                  let retimed = retimestampAudio(sampleBuffer, base: base) else { return false }
-            return input.append(retimed)
+        case .system: guard !loggedSystemFormat else { return }; loggedSystemFormat = true
+        case .microphone: guard !loggedMicFormat else { return }; loggedMicFormat = true
         }
+        guard let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer),
+              let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription) else {
+            return
+        }
+        let label = track == .system ? "System" : "Mic"
+        let interleaved = (asbd.pointee.mFormatFlags & kAudioFormatFlagIsNonInterleaved) == 0
+        logSegment(
+            "\(label) audio format: \(Int(asbd.pointee.mSampleRate))Hz ch=\(asbd.pointee.mChannelsPerFrame) " +
+            "interleaved=\(interleaved) formatID=\(asbd.pointee.mFormatID)"
+        )
+    }
+
+    private func recoverFromFailedWriter() {
+        guard !isFinalizing else { return }
+        let now = Date()
+        guard now.timeIntervalSince(lastWriterRecovery) >= writerRecoveryCooldown else { return }
+        lastWriterRecovery = now
+
+        let errorDetail = writer?.error?.localizedDescription ?? "unknown"
+        logSegment("Writer failed (\(errorDetail)) — recovering segment")
+        guard let writer, let url = segmentURL else {
+            openNewSegmentFile()
+            return
+        }
+        videoInput?.markAsFinished()
+        systemAudioInput?.markAsFinished()
+        micAudioInput?.markAsFinished()
+        self.writer = nil
+        videoInput = nil
+        systemAudioInput = nil
+        micAudioInput = nil
+        segmentURL = nil
+        hasStartedSession = false
+        segmentMediaAnchor = nil
+        pendingFinalizationURLs.remove(url)
+        try? FileManager.default.removeItem(at: url)
+        isFinalizing = false
+        openNewSegmentFile()
+    }
+
+    private func logSegment(_ message: String) {
+        Task { @MainActor in
+            ClippyDebugLog.shared.log("Recorder", message)
+        }
+    }
+
+    private func ensureAudioInputs(on writer: AVAssetWriter) {
+        guard !hasStartedSession else { return }
+        if systemAudioInput == nil {
+            systemAudioInput = makePCMAudioInput(on: writer)
+        }
+        if micAudioInput == nil {
+            micAudioInput = makePCMAudioInput(on: writer)
+        }
+    }
+
+    private func makePCMAudioInput(on writer: AVAssetWriter) -> AVAssetWriterInput? {
+        let settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVSampleRateKey: 48_000,
+            AVNumberOfChannelsKey: 2,
+            AVLinearPCMBitDepthKey: 32,
+            AVLinearPCMIsFloatKey: true,
+            AVLinearPCMIsBigEndianKey: false,
+            AVLinearPCMIsNonInterleaved: false
+        ]
+        let input = AVAssetWriterInput(
+            mediaType: .audio,
+            outputSettings: settings,
+            sourceFormatHint: Self.pcmAudioFormatHint
+        )
+        input.expectsMediaDataInRealTime = true
+        guard writer.canAdd(input) else {
+            logSegment("Could not add PCM audio input to segment writer")
+            return nil
+        }
+        writer.add(input)
+        return input
     }
 
     private func isValidAudioSample(_ sampleBuffer: CMSampleBuffer) -> Bool {
         guard CMSampleBufferIsValid(sampleBuffer) else { return false }
-        if CMSampleBufferGetNumSamples(sampleBuffer) > 0 { return true }
-        guard CMSampleBufferGetFormatDescription(sampleBuffer) != nil else { return false }
-        return CMSampleBufferGetTotalSampleSize(sampleBuffer) > 0
-    }
-
-    private func makeAudioInput(for sampleBuffer: CMSampleBuffer, writer: AVAssetWriter) -> AVAssetWriterInput? {
-        guard let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer) else { return nil }
-
-        let passthrough = AVAssetWriterInput(mediaType: .audio, outputSettings: nil, sourceFormatHint: formatDescription)
-        passthrough.expectsMediaDataInRealTime = true
-        if writer.canAdd(passthrough) {
-            writer.add(passthrough)
-            return passthrough
+        if CMSampleBufferGetFormatDescription(sampleBuffer) == nil { return false }
+        if !CMSampleBufferDataIsReady(sampleBuffer) {
+            _ = CMSampleBufferMakeDataReady(sampleBuffer)
         }
-
-        let settings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatMPEG4AAC,
-            AVSampleRateKey: 48_000,
-            AVNumberOfChannelsKey: 2,
-            AVEncoderBitRateKey: 128_000
-        ]
-        let encoded = AVAssetWriterInput(mediaType: .audio, outputSettings: settings)
-        encoded.expectsMediaDataInRealTime = true
-        guard writer.canAdd(encoded) else { return nil }
-        writer.add(encoded)
-        return encoded
+        if CMSampleBufferGetNumSamples(sampleBuffer) > 0 { return true }
+        if CMSampleBufferGetTotalSampleSize(sampleBuffer) > 0 { return true }
+        if let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer),
+           CMBlockBufferGetDataLength(blockBuffer) > 0 {
+            return true
+        }
+        return CaptureAudioSampleConverter.pcmBuffer(from: sampleBuffer) != nil
     }
 
     private func startSessionIfNeeded(on writer: AVAssetWriter) {
         guard !hasStartedSession else { return }
-        guard videoInput != nil else { return }
-        guard writer.startWriting() else { return }
+        guard videoInput != nil, systemAudioInput != nil, micAudioInput != nil else { return }
+        guard writer.startWriting() else {
+            logSegment("startWriting failed: \(writer.error?.localizedDescription ?? "unknown")")
+            return
+        }
         writer.startSession(atSourceTime: .zero)
         hasStartedSession = true
     }
@@ -326,7 +512,8 @@ private final class SegmentWriter: @unchecked Sendable {
 
     private func retimestampAudio(_ sampleBuffer: CMSampleBuffer, base: CMTime) -> CMSampleBuffer? {
         let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-        let local = CMTimeSubtract(pts, base)
+        var local = CMTimeSubtract(pts, base)
+        if CMTimeCompare(local, .zero) < 0 { local = .zero }
         let duration = CMSampleBufferGetDuration(sampleBuffer)
         var timing = CMSampleTimingInfo(
             duration: duration.isValid ? duration : CMTime(value: 1, timescale: 48_000),
@@ -375,11 +562,11 @@ private final class SegmentWriter: @unchecked Sendable {
 
         videoInput?.markAsFinished()
         systemAudioInput?.markAsFinished()
-        microphoneAudioInput?.markAsFinished()
+        micAudioInput?.markAsFinished()
         self.writer = nil
         videoInput = nil
         systemAudioInput = nil
-        microphoneAudioInput = nil
+        micAudioInput = nil
         segmentURL = nil
         hasStartedSession = false
 
@@ -397,6 +584,10 @@ private final class SegmentWriter: @unchecked Sendable {
             if writer.status == .completed,
                Self.fileSize(at: url) > 500,
                ClipExporter.hasReadableVideoSync(at: url) {
+                let audioTracks = AVURLAsset(url: url).tracks(withMediaType: .audio).count
+                self.logSegment(
+                    "Segment finished \(url.lastPathComponent) audioTracks=\(audioTracks) \(self.audioDiagnostics)"
+                )
                 let measured = ClipExporter.measuredDurationSync(at: url)
                     ?? max(Double(framesWritten) / Double(self.captureFPS), 0.1)
                 segment = RecordingSegment(url: url, startTime: startedAt, duration: measured, frameCount: Int(framesWritten))
@@ -424,8 +615,6 @@ private final class SegmentWriter: @unchecked Sendable {
     }
 }
 
-// MARK: - Screen recorder
-
 @MainActor
 final class ScreenRecorder: NSObject, ObservableObject {
     static let shared = ScreenRecorder()
@@ -444,7 +633,10 @@ final class ScreenRecorder: NSObject, ObservableObject {
     private let maxBufferDuration: TimeInterval = 60
 
     private var segmentWriter: SegmentWriter?
+    private nonisolated(unsafe) var captureWriter: SegmentWriter?
     private var bufferTicker: Task<Void, Never>?
+    private var lastBufferMaintenance = Date.distantPast
+    private let bufferMaintenanceInterval: TimeInterval = 5
     private var activeCaptureFPS: Int = 30
 
     private let bufferDirectory: URL = {
@@ -454,7 +646,7 @@ final class ScreenRecorder: NSObject, ObservableObject {
         return base
     }()
 
-    private let processingQueue = DispatchQueue(label: "com.clippy.recorder", qos: .userInitiated)
+    private let processingQueue = DispatchQueue(label: "com.clippy.recorder.sync", qos: .userInitiated)
 
     private override init() {
         super.init()
@@ -587,14 +779,13 @@ final class ScreenRecorder: NSObject, ObservableObject {
                 }
             }
             writer.onMicrophoneSample = { sampleBuffer in
-                Task { @MainActor in
-                    VoiceCommandListener.shared.ingestSharedCaptureMicrophoneSample(sampleBuffer)
-                }
+                VoiceCommandListener.shared.ingestSharedCaptureMicrophoneSampleNonisolated(sampleBuffer)
             }
             segmentWriter = writer
-            try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: processingQueue)
-            try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: processingQueue)
-            try stream.addStreamOutput(self, type: .microphone, sampleHandlerQueue: processingQueue)
+            captureWriter = writer
+            try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: CapturePipeline.writerQueue)
+            try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: CapturePipeline.writerQueue)
+            try stream.addStreamOutput(self, type: .microphone, sampleHandlerQueue: CapturePipeline.writerQueue)
 
             if !captureSettings.preferredAudioOutputUID.isEmpty {
                 AudioDeviceManager.setSystemDefaultOutputDevice(uid: captureSettings.preferredAudioOutputUID)
@@ -629,6 +820,7 @@ final class ScreenRecorder: NSObject, ObservableObject {
         await finalizeLegacySegment()
         stream = nil
         segmentWriter = nil
+        captureWriter = nil
         isCapturing = false
         statusMessage = "Capture stopped"
         updateBufferState()
@@ -645,13 +837,11 @@ final class ScreenRecorder: NSObject, ObservableObject {
 
         logBufferSnapshot("start")
 
-        // Drop any frames captured after the button press before finalizing the boundary segment.
         let clipBoundary = Date()
         processingQueue.sync { [weak self] in
             self?.segmentWriter?.setClipBoundary(wallTime: clipBoundary)
         }
 
-        // Stop capture immediately so nothing after the button press is recorded.
         let boundarySegment = await pauseAndFinalizeAtClipBoundary()
         await waitForPendingFinalizations(timeout: 3.0)
 
@@ -791,9 +981,8 @@ final class ScreenRecorder: NSObject, ObservableObject {
             return
         }
         segments.append(segment)
-        let audioTrackCount = AVURLAsset(url: segment.url).tracks(withMediaType: .audio).count
         logRecorder(
-            "Segment ingested \(segment.url.lastPathComponent) audioTracks=\(audioTrackCount) " +
+            "Segment ingested \(segment.url.lastPathComponent) dur=\(String(format: "%.1f", segment.duration))s " +
             (processingQueue.sync { segmentWriter?.audioDiagnostics } ?? "")
         )
         pruneSegments()
@@ -804,10 +993,19 @@ final class ScreenRecorder: NSObject, ObservableObject {
         bufferTicker?.cancel()
         bufferTicker = Task { @MainActor in
             while !Task.isCancelled, isCapturing {
+                maintainBufferIfNeeded()
                 updateBufferState()
-                try? await Task.sleep(nanoseconds: 500_000_000)
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
         }
+    }
+
+    private func maintainBufferIfNeeded() {
+        let now = Date()
+        guard now.timeIntervalSince(lastBufferMaintenance) >= bufferMaintenanceInterval else { return }
+        lastBufferMaintenance = now
+        pruneSegments()
+        purgeOrphanBufferFiles()
     }
 
     private func finalizeLegacySegment() async {
@@ -909,9 +1107,10 @@ final class ScreenRecorder: NSObject, ObservableObject {
         let protected = protectedSegmentURLs()
         let before = segments.count
         segments = segments.filter { segment in
-            if isValidSegmentFile(segment.url) { return true }
             if protected.contains(segment.url) { return true }
+            if segment.duration > 0, fileSize(at: segment.url) > 500 { return true }
             logRecorder("Dropping stale segment ref: \(segment.url.lastPathComponent) size=\(fileSize(at: segment.url))")
+            try? FileManager.default.removeItem(at: segment.url)
             return false
         }
         if segments.count != before {
@@ -920,12 +1119,11 @@ final class ScreenRecorder: NSObject, ObservableObject {
     }
 
     private func updateBufferState() {
-        purgeStaleSegments()
-        let validSegments = segments.filter { isValidSegmentFile($0.url) }
+        let validSegments = segments
         let finalized = validSegments.reduce(0) { $0 + $1.duration }
         let inProgress: TimeInterval
         if let writer = segmentWriter, writer.currentSegmentURL != nil {
-            inProgress = min(segmentDuration, Double(writer.writtenFrameCount) / Double(activeCaptureFPS))
+            inProgress = min(segmentDuration, Double(writer.writtenFrameCount) / Double(max(activeCaptureFPS, 1)))
         } else {
             inProgress = 0
         }
@@ -945,26 +1143,68 @@ final class ScreenRecorder: NSObject, ObservableObject {
     private func pruneSegments() {
         guard !isClipping else { return }
         purgeStaleSegments()
-        guard let newest = segments.last else { return }
-        segments = segments.filter { newest.startTime.timeIntervalSince($0.startTime) < maxBufferDuration }
-        let protected = protectedSegmentURLs()
-        let keep = Set(segments.map(\.url)).union(protected)
-        if let files = try? FileManager.default.contentsOfDirectory(at: bufferDirectory, includingPropertiesForKeys: nil) {
-            for file in files {
-                let name = file.lastPathComponent
-                let isSegment = name.hasPrefix("seg_") && (file.pathExtension == "mov" || file.pathExtension == "mp4")
-                let isExportStaging = name.hasPrefix("export_")
-                let isSidecar = name.contains(".sb-")
-                if isSidecar || isExportStaging {
-                    continue
-                }
-                if isSegment && !keep.contains(file) {
-                    logRecorder("Pruning old segment file: \(name)")
-                    try? FileManager.default.removeItem(at: file)
-                }
+
+        segments.sort { $0.startTime < $1.startTime }
+        var keptDuration: TimeInterval = 0
+        var kept: [RecordingSegment] = []
+        for segment in segments.reversed() {
+            kept.insert(segment, at: 0)
+            keptDuration += segment.duration
+            if keptDuration >= maxBufferDuration - 0.05 {
+                break
             }
         }
+
+        let protected = protectedSegmentURLs()
+        let keptURLs = Set(kept.map(\.url)).union(protected)
+        let removed = segments.filter { !keptURLs.contains($0.url) }
+        if !removed.isEmpty {
+            logRecorder("Pruning \(removed.count) segment(s) beyond \(Int(maxBufferDuration))s buffer")
+        }
+        segments = segments.filter { keptURLs.contains($0.url) }
+
+        deleteBufferFiles { url, name in
+            let isSegment = name.hasPrefix("seg_") && (url.pathExtension == "mov" || url.pathExtension == "mp4")
+            return isSegment && !keptURLs.contains(url)
+        }
         updateBufferState()
+    }
+
+    private func purgeOrphanBufferFiles() {
+        let protected = protectedSegmentURLs()
+        let keep = Set(segments.map(\.url)).union(protected)
+
+        deleteBufferFiles { url, name in
+            if name.contains(".sb-") {
+                guard let sbRange = name.range(of: ".sb-") else { return false }
+                let parentURL = bufferDirectory.appendingPathComponent(String(name[..<sbRange.lowerBound]))
+                if keep.contains(parentURL) || protected.contains(parentURL) {
+                    return false
+                }
+                return !FileManager.default.fileExists(atPath: parentURL.path)
+            }
+            if name.hasPrefix("export_") {
+                guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+                      let modified = attrs[.modificationDate] as? Date else {
+                    return false
+                }
+                return Date().timeIntervalSince(modified) > 120
+            }
+            let isSegment = name.hasPrefix("seg_") && (url.pathExtension == "mov" || url.pathExtension == "mp4")
+            return isSegment && !keep.contains(url)
+        }
+    }
+
+    private func deleteBufferFiles(where shouldDelete: (URL, String) -> Bool) {
+        guard let files = try? FileManager.default.contentsOfDirectory(at: bufferDirectory, includingPropertiesForKeys: nil) else {
+            return
+        }
+        for file in files {
+            let name = file.lastPathComponent
+            if shouldDelete(file, name) {
+                try? FileManager.default.removeItem(at: file)
+            }
+        }
     }
 }
 
@@ -981,17 +1221,21 @@ extension ScreenRecorder: SCStreamDelegate {
 
 extension ScreenRecorder: SCStreamOutput {
     nonisolated func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
-        processingQueue.async { [weak self] in
-            switch type {
-            case .screen:
-                self?.segmentWriter?.processVideo(sampleBuffer)
-            case .audio:
-                self?.segmentWriter?.processSystemAudio(sampleBuffer)
-            case .microphone:
-                self?.segmentWriter?.processMicrophoneAudio(sampleBuffer)
-            @unknown default:
-                break
-            }
+        guard sampleBuffer.isValid else { return }
+        let writer = captureWriter
+        switch type {
+        case .screen:
+            guard let copy = CapturePipeline.copySampleBuffer(sampleBuffer) else { return }
+            writer?.processVideo(copy)
+        case .audio:
+            writer?.noteSystemAudioReceived()
+            guard let copy = CapturePipeline.copySampleBuffer(sampleBuffer) else { return }
+            writer?.processSystemAudio(copy)
+        case .microphone:
+            guard let copy = CapturePipeline.copySampleBuffer(sampleBuffer) else { return }
+            writer?.processMicrophoneAudio(copy)
+        @unknown default:
+            break
         }
     }
 }

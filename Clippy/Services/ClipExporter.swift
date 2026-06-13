@@ -24,7 +24,6 @@ enum ClipExporter {
         }
     }
 
-    /// Returns true when the file contains at least one readable video sample.
     static func hasReadableVideoSync(at url: URL) -> Bool {
         guard fileSize(at: url) > 500 else { return false }
         let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
@@ -45,7 +44,6 @@ enum ClipExporter {
         hasReadableVideoSync(at: url)
     }
 
-    /// Returns true when AVFoundation can read at least one video frame from the file.
     static func isPlayableVideo(at url: URL) async -> Bool {
         guard fileSize(at: url) > 500 else { return false }
         let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
@@ -105,15 +103,20 @@ enum ClipExporter {
         ]
 
         var lastError: Error?
+        let sourceHasAudio = await segmentsContainAudio(valid)
         for (name, attempt) in attempts {
             do {
                 try await attempt()
+                let exportHasAudio = await hasReadableAudio(at: outputURL)
                 if FileManager.default.fileExists(atPath: outputURL.path),
                    fileSize(at: outputURL) > 500,
-                   await isPlayableVideo(at: outputURL) {
+                   await isPlayableVideo(at: outputURL),
+                   (!sourceHasAudio || exportHasAudio) {
                     return
                 }
-                lastError = ExportError.exportFailed("Export '\(name)' produced an unplayable file.")
+                lastError = ExportError.exportFailed(
+                    "Export '\(name)' produced an unplayable file\(sourceHasAudio ? " (missing audio)" : "")."
+                )
                 try? FileManager.default.removeItem(at: outputURL)
             } catch {
                 lastError = error
@@ -141,10 +144,9 @@ enum ClipExporter {
         }
 
         var systemAudioTrack: AVMutableCompositionTrack?
-        var microphoneAudioTrack: AVMutableCompositionTrack?
+        var micAudioTrack: AVMutableCompositionTrack?
         var videoCursor = CMTime.zero
-        var systemAudioCursor = CMTime.zero
-        var microphoneAudioCursor = CMTime.zero
+        var audioCursor = CMTime.zero
 
         for segment in segments {
             let asset = AVURLAsset(url: segment.url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
@@ -162,7 +164,8 @@ enum ClipExporter {
             videoCursor = videoCursor + range.duration
 
             let audioTracks = try await asset.loadTracks(withMediaType: .audio)
-            if audioTracks.count >= 1 {
+            let sortedAudio = audioTracks.sorted { $0.trackID < $1.trackID }
+            if let sourceSystem = sortedAudio.first {
                 if systemAudioTrack == nil {
                     systemAudioTrack = composition.addMutableTrack(
                         withMediaType: .audio,
@@ -170,22 +173,21 @@ enum ClipExporter {
                     )
                 }
                 if let systemAudioTrack {
-                    try systemAudioTrack.insertTimeRange(range, of: audioTracks[0], at: systemAudioCursor)
-                    systemAudioCursor = systemAudioCursor + range.duration
+                    try systemAudioTrack.insertTimeRange(range, of: sourceSystem, at: audioCursor)
                 }
             }
-            if audioTracks.count >= 2 {
-                if microphoneAudioTrack == nil {
-                    microphoneAudioTrack = composition.addMutableTrack(
+            if sortedAudio.count >= 2 {
+                if micAudioTrack == nil {
+                    micAudioTrack = composition.addMutableTrack(
                         withMediaType: .audio,
                         preferredTrackID: kCMPersistentTrackID_Invalid
                     )
                 }
-                if let microphoneAudioTrack {
-                    try microphoneAudioTrack.insertTimeRange(range, of: audioTracks[1], at: microphoneAudioCursor)
-                    microphoneAudioCursor = microphoneAudioCursor + range.duration
+                if let micAudioTrack {
+                    try micAudioTrack.insertTimeRange(range, of: sortedAudio[1], at: audioCursor)
                 }
             }
+            audioCursor = audioCursor + range.duration
         }
 
         guard videoCursor.seconds > 0.01 else { throw ExportError.noVideo }
@@ -197,12 +199,17 @@ enum ClipExporter {
             duration: CMTime(seconds: keepSeconds, preferredTimescale: 60_000)
         )
 
+        let audioMix = makeExportAudioMix(systemTrack: systemAudioTrack, micTrack: micAudioTrack)
+
         for preset in [AVAssetExportPresetPassthrough, AVAssetExportPreset1280x720, AVAssetExportPresetHighestQuality] {
             guard let exporter = AVAssetExportSession(asset: composition, presetName: preset),
                   exporter.supportedFileTypes.contains(.mp4) else { continue }
             exporter.outputURL = outputURL
             exporter.outputFileType = .mp4
             exporter.timeRange = timeRange
+            if audioMix != nil {
+                exporter.audioMix = audioMix
+            }
             await exporter.exportAsync()
             if exporter.status == .completed, fileSize(at: outputURL) > 500 { return }
             try? FileManager.default.removeItem(at: outputURL)
@@ -428,6 +435,29 @@ enum ClipExporter {
         try await finishWriting(writer)
     }
 
+    private static func makeExportAudioMix(
+        systemTrack: AVMutableCompositionTrack?,
+        micTrack: AVMutableCompositionTrack?
+    ) -> AVAudioMix? {
+        guard systemTrack != nil || micTrack != nil else { return nil }
+
+        var parameters: [AVMutableAudioMixInputParameters] = []
+        if let systemTrack {
+            let params = AVMutableAudioMixInputParameters(track: systemTrack)
+            params.setVolume(1.0, at: .zero)
+            parameters.append(params)
+        }
+        if let micTrack {
+            let params = AVMutableAudioMixInputParameters(track: micTrack)
+            params.setVolume(1.25, at: .zero)
+            parameters.append(params)
+        }
+
+        let mix = AVMutableAudioMix()
+        mix.inputParameters = parameters
+        return mix
+    }
+
     private static func segmentsContainAudio(_ segments: [RecordingSegment]) async -> Bool {
         for segment in segments {
             let asset = AVURLAsset(url: segment.url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
@@ -436,6 +466,14 @@ enum ClipExporter {
             }
         }
         return false
+    }
+
+    private static func hasReadableAudio(at url: URL) async -> Bool {
+        let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
+        guard let tracks = try? await asset.loadTracks(withMediaType: .audio), !tracks.isEmpty else {
+            return false
+        }
+        return true
     }
 
     private static func resolvedDuration(for segment: RecordingSegment, asset: AVURLAsset) async -> TimeInterval {

@@ -2,7 +2,6 @@ import AVFoundation
 import AVKit
 import SwiftUI
 
-/// Native AVPlayerView wrapper — avoids SwiftUI VideoPlayer crashes on recent macOS (_AVKit_SwiftUI metadata fault).
 struct ClipPlayerView: NSViewRepresentable {
     let url: URL
 

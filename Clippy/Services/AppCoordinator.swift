@@ -8,13 +8,16 @@ final class AppCoordinator: ObservableObject {
     @Published var lastClip: Clip?
     @Published var showClipSavedBanner = false
     @Published var errorMessage: String?
+    @Published var showOnboarding: Bool
 
     private let settings = AppSettings.shared
     private let recorder = ScreenRecorder.shared
     private let clips = ClipManager.shared
     private let voice = VoiceCommandListener.shared
 
-    private init() {}
+    private init() {
+        showOnboarding = !AppSettings.shared.hasCompletedOnboarding
+    }
 
     func bootstrap() {
         HotkeyManager.shared.onTrigger = { [weak self] in
@@ -31,6 +34,20 @@ final class AppCoordinator: ObservableObject {
             }
         }
 
+        voice.onOnboardingClipCommand = { [weak self] in
+            Task { @MainActor in
+                self?.completeOnboarding(fromVoiceDemo: true)
+            }
+        }
+
+        if settings.hasCompletedOnboarding {
+            startBackgroundServices()
+        } else {
+            recorder.requestScreenCaptureAccess()
+        }
+    }
+
+    func startBackgroundServices() {
         recorder.requestScreenCaptureAccess()
 
         Task {
@@ -40,6 +57,44 @@ final class AppCoordinator: ObservableObject {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 await voice.prepareAndStart()
             }
+        }
+    }
+
+    func applyOnboardingAudioDevices() {
+        if !settings.preferredAudioOutputUID.isEmpty {
+            AudioDeviceManager.setSystemDefaultOutputDevice(uid: settings.preferredAudioOutputUID)
+        }
+        if !settings.preferredMicrophoneUID.isEmpty {
+            AudioDeviceManager.setSystemDefaultInputDevice(uid: settings.preferredMicrophoneUID)
+        }
+        voice.refreshMicrophone()
+    }
+
+    func beginOnboardingVoicePractice() {
+        applyOnboardingAudioDevices()
+        settings.voiceCommandsEnabled = true
+
+        Task {
+            await DisplayStore.shared.refreshDisplays()
+            await recorder.startCapture()
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            voice.onboardingMode = true
+            await voice.prepareAndStart()
+        }
+    }
+
+    func completeOnboarding(fromVoiceDemo: Bool) {
+        if fromVoiceDemo {
+            SoundPlayer.shared.playClipSound()
+        }
+        voice.onboardingMode = false
+        settings.hasCompletedOnboarding = true
+        settings.voiceCommandsEnabled = true
+        withAnimation(ClippyTheme.spring) {
+            showOnboarding = false
+        }
+        Task {
+            await voice.prepareAndStart()
         }
     }
 

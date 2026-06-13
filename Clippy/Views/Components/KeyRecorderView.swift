@@ -87,7 +87,7 @@ final class KeyCaptureView: NSView {
             super.keyDown(with: event)
             return
         }
-        if event.keyCode == 53 { // Esc
+        if event.keyCode == 53 {
             isRecording = false
             return
         }

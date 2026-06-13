@@ -11,7 +11,13 @@ struct ClippyApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            Group {
+                if coordinator.showOnboarding {
+                    OnboardingView()
+                } else {
+                    ContentView()
+                }
+            }
                 .environmentObject(settings)
                 .environmentObject(coordinator)
                 .environmentObject(clipManager)

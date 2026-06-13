@@ -16,6 +16,8 @@ final class VoiceCommandListener: NSObject, ObservableObject {
     @Published private(set) var lastVoiceError: String?
 
     var onClipCommand: (() -> Void)?
+    var onOnboardingClipCommand: (() -> Void)?
+    var onboardingMode = false
 
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     private let audioCapture = VoiceAudioCapture()
@@ -142,12 +144,11 @@ final class VoiceCommandListener: NSObject, ObservableObject {
     }
 
     func ingestSharedCaptureMicrophoneSample(_ sampleBuffer: CMSampleBuffer) {
-        guard usesSharedCaptureMicrophone, isListening else { return }
-        guard let pcm = CaptureAudioSampleConverter.pcmBuffer(from: sampleBuffer),
-              let converted = audioConverter.convert(pcm) else { return }
-        speechQueue.async { [weak self] in
-            self?.activeRecognitionRequest?.append(converted)
-        }
+        SharedMicIngest.ingest(sampleBuffer)
+    }
+
+    nonisolated func ingestSharedCaptureMicrophoneSampleNonisolated(_ sampleBuffer: CMSampleBuffer) {
+        SharedMicIngest.ingest(sampleBuffer)
     }
 
     private func restartWithSelectedMicrophone() async {
@@ -246,12 +247,14 @@ final class VoiceCommandListener: NSObject, ObservableObject {
             "do your thing"
         ]
         if #available(macOS 13.0, *) {
-            // Server-side recognition is more reliable for continuous listening on macOS.
             request.requiresOnDeviceRecognition = false
             logVoice("requiresOnDeviceRecognition=false (server recognition)")
         }
 
         activeRecognitionRequest = request
+        if usesSharedCaptureMicrophone {
+            SharedMicIngest.setRouting(enabled: true, request: request)
+        }
         logVoice("Starting recognition task")
 
         recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
@@ -280,7 +283,11 @@ final class VoiceCommandListener: NSObject, ObservableObject {
                 hasTriggeredThisUtterance = true
                 statusMessage = "Heard clip command!"
                 logVoice("Trigger matched in: \"\(text)\"")
-                onClipCommand?()
+                if onboardingMode {
+                    onOnboardingClipCommand?()
+                } else {
+                    onClipCommand?()
+                }
                 await stopListening()
                 scheduleRestart(after: 1.5)
                 return
@@ -309,11 +316,11 @@ final class VoiceCommandListener: NSObject, ObservableObject {
     }
 
     private func shouldRestartAfterRecognitionError(_ error: NSError) -> Bool {
-        if error.code == 1110 { return true } // no speech / end of utterance
+        if error.code == 1110 { return true }
         if error.domain == "kAFAssistantErrorDomain" {
             return [216, 217, 1101, 1107].contains(error.code)
         }
-        if error.domain == "kLSRErrorDomain", error.code == 301 { return true } // recognition request was canceled
+        if error.domain == "kLSRErrorDomain", error.code == 301 { return true }
         return false
     }
 
@@ -328,6 +335,7 @@ final class VoiceCommandListener: NSObject, ObservableObject {
     }
 
     private func tearDownRecognitionTask() {
+        SharedMicIngest.setRouting(enabled: false, request: nil)
         recognitionTask?.cancel()
         recognitionTask = nil
         activeRecognitionRequest?.endAudio()
@@ -372,5 +380,33 @@ final class VoiceCommandListener: NSObject, ObservableObject {
         }
         restartWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+}
+
+private enum SharedMicIngest {
+    private static let converter = SpeechAudioConverter()
+    private static let speechQueue = DispatchQueue(label: "com.clippy.voice.shared-mic", qos: .userInitiated)
+    private static let lock = NSLock()
+    private static nonisolated(unsafe) var enabled = false
+    private static nonisolated(unsafe) var request: SFSpeechAudioBufferRecognitionRequest?
+
+    static func setRouting(enabled: Bool, request: SFSpeechAudioBufferRecognitionRequest?) {
+        lock.lock()
+        self.enabled = enabled
+        self.request = request
+        lock.unlock()
+    }
+
+    static func ingest(_ sampleBuffer: CMSampleBuffer) {
+        lock.lock()
+        let active = enabled
+        let activeRequest = request
+        lock.unlock()
+        guard active, let activeRequest else { return }
+        guard let pcm = CaptureAudioSampleConverter.pcmBuffer(from: sampleBuffer),
+              let converted = converter.convert(pcm) else { return }
+        speechQueue.async {
+            activeRequest.append(converted)
+        }
     }
 }

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Generate the Clippy DMG installer window background."""
 
 from __future__ import annotations
 
@@ -108,7 +107,6 @@ def main() -> None:
 
     draw = ImageDraw.Draw(img)
 
-    # Top accent bar
     draw.rounded_rectangle((24, 18, WIDTH - 24, 92), radius=16, fill=(22, 22, 22, 230), outline=(46, 217, 107, 45), width=1)
 
     if LOGO.exists():
@@ -124,7 +122,6 @@ def main() -> None:
     draw.text((98, 30), "Clippy", fill=TEXT, font=title_font)
     draw.text((98, 62), "Instant screen clips for macOS", fill=TEXT_MUTED, font=subtitle_font)
 
-    # Drop zones (subtle rings behind where icons will sit)
     for cx, cy in ((170, 190), (470, 190)):
         draw.ellipse((cx - 58, cy - 58, cx + 58, cy + 58), outline=(46, 217, 107, 35), width=2)
         draw.ellipse((cx - 48, cy - 48, cx + 48, cy + 48), outline=(255, 255, 255, 12), width=1)
@@ -136,7 +133,6 @@ def main() -> None:
     draw.text((452, 268), "Applications", fill=TEXT, font=label_font, anchor="mm")
     draw.text((320, 292), "Drop the app on Applications to install", fill=TEXT_MUTED, font=hint_font, anchor="mm")
 
-    # Bottom footer
     draw.line((24, HEIGHT - 34, WIDTH - 24, HEIGHT - 34), fill=(46, 217, 107, 40), width=1)
     draw.text((320, HEIGHT - 16), "Press ⌘K or say “Clippy, clip that”", fill=TEXT_MUTED, font=hint_font, anchor="mm")
 

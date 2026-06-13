@@ -2,26 +2,18 @@ import AVFoundation
 import CoreMedia
 import Foundation
 
-/// Speech-only mic tap. Sets the system default input device but does not rebind the audio unit (avoids -10875).
 final class VoiceAudioCapture {
     private let engine = AVAudioEngine()
     private let queue = DispatchQueue(label: "com.clippy.voice.audio", qos: .userInitiated)
     private var pcmHandler: ((AVAudioPCMBuffer) -> Void)?
-    private var isRunning = false
 
     func start(preferredUID: String, onBuffer: @escaping (AVAudioPCMBuffer) -> Void) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            queue.async { [weak self] in
-                guard let self else {
-                    continuation.resume(throwing: CaptureError.unavailable)
-                    return
-                }
+            queue.async {
                 do {
-                    self.pcmHandler = onBuffer
-                    try self.startLocked(preferredUID: preferredUID)
+                    try self.startLocked(preferredUID: preferredUID, onBuffer: onBuffer)
                     continuation.resume()
                 } catch {
-                    self.pcmHandler = nil
                     continuation.resume(throwing: error)
                 }
             }
@@ -29,59 +21,34 @@ final class VoiceAudioCapture {
     }
 
     func stop() async {
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            queue.async { [weak self] in
-                self?.stopLocked()
+        await withCheckedContinuation { continuation in
+            queue.async {
+                if self.engine.isRunning {
+                    self.engine.stop()
+                    self.engine.inputNode.removeTap(onBus: 0)
+                }
+                self.pcmHandler = nil
                 continuation.resume()
             }
         }
     }
 
-    private func startLocked(preferredUID: String) throws {
-        stopLocked()
-
+    private func startLocked(preferredUID: String, onBuffer: @escaping (AVAudioPCMBuffer) -> Void) throws {
+        if engine.isRunning {
+            engine.stop()
+            engine.inputNode.removeTap(onBus: 0)
+        }
+        pcmHandler = onBuffer
         if !preferredUID.isEmpty {
             AudioDeviceManager.setSystemDefaultInputDevice(uid: preferredUID)
-            Thread.sleep(forTimeInterval: 0.15)
         }
-
         let input = engine.inputNode
-        input.volume = 0
-
-        let format = input.inputFormat(forBus: 0)
-        guard format.sampleRate > 0, format.channelCount > 0 else {
-            throw CaptureError.invalidFormat
-        }
-
-        input.removeTap(onBus: 0)
+        let format = input.outputFormat(forBus: 0)
         input.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
             self?.pcmHandler?(buffer)
         }
-
-        engine.mainMixerNode.outputVolume = 0
         engine.prepare()
         try engine.start()
-        isRunning = true
-    }
-
-    private func stopLocked() {
-        pcmHandler = nil
-        if engine.isRunning { engine.stop() }
-        engine.inputNode.removeTap(onBus: 0)
-        engine.reset()
-        isRunning = false
-    }
-
-    enum CaptureError: LocalizedError {
-        case unavailable
-        case invalidFormat
-
-        var errorDescription: String? {
-            switch self {
-            case .unavailable: return "Voice capture unavailable."
-            case .invalidFormat: return "Microphone format is invalid — try System Default in Settings."
-            }
-        }
     }
 }
 
@@ -89,27 +56,73 @@ enum CaptureAudioSampleConverter {
     static func pcmBuffer(from sampleBuffer: CMSampleBuffer) -> AVAudioPCMBuffer? {
         guard CMSampleBufferIsValid(sampleBuffer),
               let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer),
-              let streamDescription = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription),
-              let format = AVAudioFormat(streamDescription: streamDescription) else {
+              let streamDescription = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription) else {
             return nil
         }
 
-        let frameCount = CMSampleBufferGetNumSamples(sampleBuffer)
+        if streamDescription.pointee.mFormatID != kAudioFormatLinearPCM {
+            return nil
+        }
+
+        if !CMSampleBufferDataIsReady(sampleBuffer) {
+            _ = CMSampleBufferMakeDataReady(sampleBuffer)
+        }
+
+        guard let format = AVAudioFormat(streamDescription: streamDescription) else {
+            return nil
+        }
+
+        var frameCount = CMSampleBufferGetNumSamples(sampleBuffer)
+        if frameCount <= 0 {
+            let duration = CMSampleBufferGetDuration(sampleBuffer)
+            if duration.isValid, duration.seconds > 0 {
+                frameCount = max(1, Int(duration.seconds * streamDescription.pointee.mSampleRate))
+            } else if CMSampleBufferGetTotalSampleSize(sampleBuffer) > 0 {
+                let bytesPerFrame = max(1, Int(streamDescription.pointee.mBytesPerFrame))
+                frameCount = CMSampleBufferGetTotalSampleSize(sampleBuffer) / bytesPerFrame
+            }
+        }
         guard frameCount > 0,
               let pcmBuffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(frameCount)) else {
             return nil
         }
         pcmBuffer.frameLength = AVAudioFrameCount(frameCount)
 
-        var blockBuffer: CMBlockBuffer?
         let status = CMSampleBufferCopyPCMDataIntoAudioBufferList(
             sampleBuffer,
             at: 0,
             frameCount: Int32(frameCount),
             into: pcmBuffer.mutableAudioBufferList
         )
+        if status == noErr {
+            return pcmBuffer
+        }
+
+        return pcmBufferFromAudioBufferList(sampleBuffer, format: format, frameCount: frameCount)
+    }
+
+    private static func pcmBufferFromAudioBufferList(
+        _ sampleBuffer: CMSampleBuffer,
+        format: AVAudioFormat,
+        frameCount: Int
+    ) -> AVAudioPCMBuffer? {
+        guard let pcmBuffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(frameCount)) else {
+            return nil
+        }
+        pcmBuffer.frameLength = AVAudioFrameCount(frameCount)
+
+        var blockBuffer: CMBlockBuffer?
+        let status = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
+            sampleBuffer,
+            bufferListSizeNeededOut: nil,
+            bufferListOut: pcmBuffer.mutableAudioBufferList,
+            bufferListSize: MemoryLayout<AudioBufferList>.size,
+            blockBufferAllocator: kCFAllocatorDefault,
+            blockBufferMemoryAllocator: kCFAllocatorDefault,
+            flags: 0,
+            blockBufferOut: &blockBuffer
+        )
         guard status == noErr else { return nil }
-        _ = blockBuffer
         return pcmBuffer
     }
 }

@@ -8,7 +8,7 @@ final class HotkeyManager {
 
     private var hotKeyRef: EventHotKeyRef?
     private var eventHandler: EventHandlerRef?
-    private let hotKeyID = EventHotKeyID(signature: OSType(0x434C5059), id: 1) // CLPY
+    private let hotKeyID = EventHotKeyID(signature: OSType(0x434C5059), id: 1)
 
     private init() {}
 

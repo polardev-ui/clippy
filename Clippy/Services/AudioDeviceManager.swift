@@ -38,7 +38,6 @@ enum AudioDeviceManager {
         guard let resolved = resolveInputUID(preferredUID),
               let deviceID = audioDeviceID(forUID: resolved) else { return }
         setSystemDefaultInputDevice(deviceID)
-        // Do not set kAudioOutputUnitProperty_CurrentDevice — it causes -10875 format errors on many Macs.
     }
 
     static func setSystemDefaultInputDevice(uid: String) {
@@ -78,7 +77,6 @@ enum AudioDeviceManager {
         return devices.first { $0.uid == uid }?.name ?? "Unknown Output"
     }
 
-    /// Maps CoreAudio mic UID to AVCaptureDevice uniqueID for ScreenCaptureKit.
     static func avCaptureMicrophoneID(forPreferredUID uid: String) -> String? {
         let session = AVCaptureDevice.DiscoverySession(
             deviceTypes: [.microphone, .external],
@@ -99,7 +97,6 @@ enum AudioDeviceManager {
         return AVCaptureDevice.default(for: .audio)?.uniqueID
     }
 
-    /// Maps stored preference (including legacy pseudo-UIDs) to a real CoreAudio device UID.
     static func resolveInputUID(_ preferred: String) -> String? {
         guard !preferred.isEmpty else { return nil }
         if audioDeviceID(forUID: preferred) != nil { return preferred }

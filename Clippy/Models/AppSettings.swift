@@ -42,6 +42,10 @@ final class AppSettings: ObservableObject {
         didSet { persist() }
     }
 
+    @Published var hasCompletedOnboarding: Bool {
+        didSet { persist() }
+    }
+
     private let defaults = UserDefaults.standard
     private enum Keys {
         static let clipDuration = "clipDuration"
@@ -53,6 +57,7 @@ final class AppSettings: ObservableObject {
         static let preferredDisplayID = "preferredDisplayID"
         static let captureResolution = "captureResolution"
         static let captureFrameRate = "captureFrameRate"
+        static let hasCompletedOnboarding = "hasCompletedOnboarding"
     }
 
     private init() {
@@ -97,6 +102,8 @@ final class AppSettings: ObservableObject {
 
         let storedFrameRate = defaults.integer(forKey: Keys.captureFrameRate)
         captureFrameRate = CaptureFrameRate(rawValue: storedFrameRate) ?? .fps30
+
+        hasCompletedOnboarding = defaults.bool(forKey: Keys.hasCompletedOnboarding)
     }
 
     private func persist() {
@@ -111,5 +118,6 @@ final class AppSettings: ObservableObject {
         defaults.set(Int(preferredDisplayID), forKey: Keys.preferredDisplayID)
         defaults.set(captureResolution.rawValue, forKey: Keys.captureResolution)
         defaults.set(captureFrameRate.rawValue, forKey: Keys.captureFrameRate)
+        defaults.set(hasCompletedOnboarding, forKey: Keys.hasCompletedOnboarding)
     }
 }

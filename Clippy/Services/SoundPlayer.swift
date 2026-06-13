@@ -18,7 +18,6 @@ final class SoundPlayer {
             player?.prepareToPlay()
             player?.play()
         } catch {
-            // Non-fatal
         }
     }
 }

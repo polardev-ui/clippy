@@ -21,12 +21,14 @@
 		79D668C6E0446411B4144FE4 /* AudioDeviceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 291705F3D4F90AE01D950B7E /* AudioDeviceManager.swift */; };
 		7AAB2332533BEE6AA1AD10E9 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A213587C2549D0EB8D0C0F0 /* SettingsView.swift */; };
 		7E6FB331F4040144DFE1B26E /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4630CFC8FA41E7C09ABE3F9 /* AppSettings.swift */; };
+		818CC9707B129CC4D68AD9A7 /* SegmentAudioConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D938FA1AC59EE84E7D826BE /* SegmentAudioConverter.swift */; };
 		8ECC8ED6E078AC371705DD3A /* ClipManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09CC1EB235F80564E4AA3346 /* ClipManager.swift */; };
 		95893C599FF7C91625E447BF /* VoiceCommandListener.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F0AD2119401FCA49CCCB8C6 /* VoiceCommandListener.swift */; };
 		9B7B423F343824DE2558DCF4 /* VoiceCaptureSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FD4FC3CA3B55CCE8782196 /* VoiceCaptureSession.swift */; };
 		9C4C5A20CFC3ECD2B8B1743B /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1D5CE2F9BD0528ED3C5A58 /* ContentView.swift */; };
 		9ECDADB3257971702DC3FC92 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 47CFD7865F611C5CD33878E4 /* Assets.xcassets */; };
 		A3FFDAA5CAF47CB8FC916D2B /* ClipPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2037147B55866BA8BEC34EB1 /* ClipPlayerView.swift */; };
+		A42945908C81F71F741FE07C /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4780881D25359B48961159FA /* OnboardingView.swift */; };
 		B40DB574945E9BA05BD56004 /* ScreenRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C62F75B9A1FA57B6E7E7784 /* ScreenRecorder.swift */; };
 		C5EB68DCFC5B776E0B7AC0A0 /* CaptureSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B4B9B75431B0684C461CB7 /* CaptureSettings.swift */; };
 		C6EEA3D25EDC4CADD458E193 /* Clip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70B1CF2C552DD6E18AB860C5 /* Clip.swift */; };
@@ -45,6 +47,8 @@
 		26BB7EBCDF7084F556D25C62 /* ClippyDebugLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClippyDebugLog.swift; sourceTree = "<group>"; };
 		291705F3D4F90AE01D950B7E /* AudioDeviceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDeviceManager.swift; sourceTree = "<group>"; };
 		2BBCDF099C85D34ED0B0D606 /* ClipCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipCard.swift; sourceTree = "<group>"; };
+		3D938FA1AC59EE84E7D826BE /* SegmentAudioConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SegmentAudioConverter.swift; sourceTree = "<group>"; };
+		4780881D25359B48961159FA /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		47CBDFBAF7CC995C80DDFD1E /* Clippy.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Clippy.entitlements; sourceTree = "<group>"; };
 		47CFD7865F611C5CD33878E4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		4A213587C2549D0EB8D0C0F0 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -114,6 +118,7 @@
 				F4F9560D6411D7FB7410687F /* ClipDetailView.swift */,
 				0A1D5CE2F9BD0528ED3C5A58 /* ContentView.swift */,
 				D2AE5DE61144610D3BAEAABF /* LibraryView.swift */,
+				4780881D25359B48961159FA /* OnboardingView.swift */,
 				4A213587C2549D0EB8D0C0F0 /* SettingsView.swift */,
 			);
 			path = Views;
@@ -150,6 +155,7 @@
 				196FA5A62A380F48651D7D04 /* HotkeyManager.swift */,
 				95E4F7684DF9D26F03004FF7 /* RecorderDiagnostics.swift */,
 				5C62F75B9A1FA57B6E7E7784 /* ScreenRecorder.swift */,
+				3D938FA1AC59EE84E7D826BE /* SegmentAudioConverter.swift */,
 				87DDE5CA00382C278600138F /* SoundPlayer.swift */,
 				D3FD4FC3CA3B55CCE8782196 /* VoiceCaptureSession.swift */,
 				4F0AD2119401FCA49CCCB8C6 /* VoiceCommandListener.swift */,
@@ -246,8 +252,10 @@
 				E5CB53DBDF0EE0A693A16179 /* HotkeyManager.swift in Sources */,
 				4A97BE60BA9608B211833E1C /* KeyRecorderView.swift in Sources */,
 				134C0AC2EC609B81522ED3A9 /* LibraryView.swift in Sources */,
+				A42945908C81F71F741FE07C /* OnboardingView.swift in Sources */,
 				C91FA82E8764A83D204AACF8 /* RecorderDiagnostics.swift in Sources */,
 				B40DB574945E9BA05BD56004 /* ScreenRecorder.swift in Sources */,
+				818CC9707B129CC4D68AD9A7 /* SegmentAudioConverter.swift in Sources */,
 				7AAB2332533BEE6AA1AD10E9 /* SettingsView.swift in Sources */,
 				44B42A2C8A96F65AA40E5348 /* SoundPlayer.swift in Sources */,
 				32ECD3D53E8BA5E1139E204C /* Theme.swift in Sources */,
