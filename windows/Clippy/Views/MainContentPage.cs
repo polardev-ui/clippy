@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Shapes;
 using Windows.UI;
+using Colors = Microsoft.UI.Colors;
 
 namespace Clippy.Views;
 
@@ -109,7 +110,7 @@ public sealed class MainContentPage : UserControl
         _clipButton.Click += async (_, _) =>
             await AppCoordinator.Instance.TriggerClipAsync(AppCoordinator.ClipSource.Button);
 
-        var logoPath = Path.Combine(AppContext.BaseDirectory, "Assets", "clippy-logo.png");
+        var logoPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "clippy-logo.png");
         var logo = new Image
         {
             Width = 44,

@@ -1,9 +1,11 @@
 using Clippy.Models;
 using Clippy.Services;
+using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.UI;
 
 namespace Clippy.Views;
 
@@ -58,7 +60,7 @@ public sealed class OnboardingPage : UserControl
         {
             Content = "Next",
             Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 46, 217, 107)),
-            Foreground = new SolidColorBrush(Windows.UI.Colors.Black),
+            Foreground = new SolidColorBrush(Colors.Black),
             FontWeight = Microsoft.UI.Text.FontWeights.Bold,
             CornerRadius = new CornerRadius(999),
             Padding = new Thickness(24, 12, 24, 12)
@@ -172,7 +174,7 @@ public sealed class OnboardingPage : UserControl
             FontSize = 42,
             FontWeight = Microsoft.UI.Text.FontWeights.Bold,
             HorizontalAlignment = HorizontalAlignment.Center,
-            Foreground = new SolidColorBrush(Windows.UI.Colors.White)
+            Foreground = new SolidColorBrush(Colors.White)
         });
         _contentHost.Children.Add(new TextBlock
         {
@@ -213,7 +215,7 @@ public sealed class OnboardingPage : UserControl
                         FontSize = 22,
                         FontWeight = Microsoft.UI.Text.FontWeights.Bold,
                         HorizontalAlignment = HorizontalAlignment.Center,
-                        Foreground = new SolidColorBrush(Windows.UI.Colors.White)
+                        Foreground = new SolidColorBrush(Colors.White)
                     },
                     new TextBlock
                     {
@@ -276,7 +278,7 @@ public sealed class OnboardingPage : UserControl
             FontSize = 28,
             FontWeight = Microsoft.UI.Text.FontWeights.Bold,
             HorizontalAlignment = HorizontalAlignment.Center,
-            Foreground = new SolidColorBrush(Windows.UI.Colors.White)
+            Foreground = new SolidColorBrush(Colors.White)
         });
         _contentHost.Children.Add(new TextBlock
         {
@@ -299,7 +301,7 @@ public sealed class OnboardingPage : UserControl
             FontSize = 34,
             FontWeight = Microsoft.UI.Text.FontWeights.Bold,
             HorizontalAlignment = HorizontalAlignment.Center,
-            Foreground = new SolidColorBrush(Windows.UI.Colors.White)
+            Foreground = new SolidColorBrush(Colors.White)
         });
         _contentHost.Children.Add(new TextBlock
         {
@@ -342,7 +344,7 @@ public sealed class OnboardingPage : UserControl
 
     private static Image CreateLogo(int size)
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "Assets", "clippy-logo.png");
+        var path = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "clippy-logo.png");
         return new Image
         {
             Width = size,

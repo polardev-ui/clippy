@@ -13,7 +13,7 @@ public static class DisplayManager
         EnumDisplayMonitors(
             nint.Zero,
             nint.Zero,
-            (hMonitor, _, lprcMonitor, _) =>
+            (hMonitor, _, ref RECT lprcMonitor, _) =>
             {
                 var info = new MONITORINFOEX { cbSize = Marshal.SizeOf<MONITORINFOEX>() };
                 if (GetMonitorInfo(hMonitor, ref info))

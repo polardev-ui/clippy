@@ -63,7 +63,6 @@ public sealed class VoiceCommandListener
                 "clip it",
                 "do your thing"
             });
-            _recognizer.UIOptions.AudibleFeedback = false;
             await _recognizer.CompileConstraintsAsync();
 
             _session = _recognizer.ContinuousRecognitionSession;

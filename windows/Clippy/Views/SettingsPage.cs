@@ -1,8 +1,10 @@
 using Clippy.Models;
 using Clippy.Services;
+using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Windows.UI;
 
 namespace Clippy.Views;
 
@@ -25,10 +27,10 @@ public sealed class SettingsPage : UserControl
         root.Children.Add(CreateSection("Video Quality", CreateQualityPicker()));
         root.Children.Add(CreateSection("Display", _displayCombo = CreateDisplayPicker()));
         root.Children.Add(CreateSection("Keyboard Shortcut", CreateHotkeyPanel()));
-        root.Children.Add(CreateSection("Audio", CreateAudioPanel(out _micCombo, out _outputCombo)));
-        root.Children.Add(CreateSection("Voice Commands", CreateVoicePanel(out _voiceStatus, out _voiceHeard)));
+        root.Children.Add(CreateSection("Audio", CreateAudioPanel()));
+        root.Children.Add(CreateSection("Voice Commands", CreateVoicePanel()));
         root.Children.Add(CreateSection("Feedback", CreateSoundToggle()));
-        root.Children.Add(CreateSection("Debug Log", CreateDebugPanel(out _logPanel, out _lastClipSummary)));
+        root.Children.Add(CreateSection("Debug Log", CreateDebugPanel()));
 
         scroll.Content = root;
         Content = scroll;
@@ -91,7 +93,7 @@ public sealed class SettingsPage : UserControl
         var group = new RadioButtons();
         foreach (var duration in ClipDurationExtensions.All)
         {
-            group.Items.Add(new RadioButtonsItem { Content = duration.Label(), Tag = duration });
+            group.Items.Add(new ComboBoxItem { Content = duration.Label(), Tag = duration });
         }
 
         group.SelectedIndex = AppSettings.Instance.ClipDuration switch
@@ -103,7 +105,7 @@ public sealed class SettingsPage : UserControl
 
         group.SelectionChanged += (_, _) =>
         {
-            if (group.SelectedItem is RadioButtonsItem { Tag: ClipDuration d })
+            if (group.SelectedItem is ComboBoxItem { Tag: ClipDuration d })
             {
                 AppSettings.Instance.ClipDuration = d;
                 AppSettings.Instance.Persist();
@@ -236,14 +238,14 @@ public sealed class SettingsPage : UserControl
         };
     }
 
-    private UIElement CreateAudioPanel(out ComboBox micCombo, out ComboBox outputCombo)
+    private UIElement CreateAudioPanel()
     {
-        micCombo = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, DisplayMemberPath = "Name" };
-        outputCombo = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, DisplayMemberPath = "Name" };
+        _micCombo = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, DisplayMemberPath = "Name" };
+        _outputCombo = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, DisplayMemberPath = "Name" };
 
-        micCombo.SelectionChanged += (_, _) =>
+        _micCombo.SelectionChanged += (_, _) =>
         {
-            if (micCombo.SelectedItem is AudioDevice device)
+            if (_micCombo.SelectedItem is AudioDevice device)
             {
                 AppSettings.Instance.PreferredMicrophoneId = device.Id;
                 AppSettings.Instance.Persist();
@@ -252,9 +254,9 @@ public sealed class SettingsPage : UserControl
             }
         };
 
-        outputCombo.SelectionChanged += (_, _) =>
+        _outputCombo.SelectionChanged += (_, _) =>
         {
-            if (outputCombo.SelectedItem is AudioDevice device)
+            if (_outputCombo.SelectedItem is AudioDevice device)
             {
                 AppSettings.Instance.PreferredAudioOutputId = device.Id;
                 AppSettings.Instance.Persist();
@@ -275,17 +277,17 @@ public sealed class SettingsPage : UserControl
                     Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(140, 255, 255, 255))
                 },
                 new TextBlock { Text = "System audio output", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold },
-                outputCombo,
+                _outputCombo,
                 new TextBlock { Text = "Microphone", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold },
-                micCombo
+                _micCombo
             }
         };
     }
 
-    private UIElement CreateVoicePanel(out TextBlock status, out TextBlock heard)
+    private UIElement CreateVoicePanel()
     {
-        status = new TextBlock { FontSize = 12, Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(140, 255, 255, 255)) };
-        heard = new TextBlock { FontSize = 12, Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 46, 217, 107)) };
+        _voiceStatus = new TextBlock { FontSize = 12, Foreground = new SolidColorBrush(Color.FromArgb(140, 255, 255, 255)) };
+        _voiceHeard = new TextBlock { FontSize = 12, Foreground = new SolidColorBrush(Color.FromArgb(255, 46, 217, 107)) };
 
         var toggle = new ToggleSwitch
         {
@@ -303,13 +305,13 @@ public sealed class SettingsPage : UserControl
         VoiceCommandListener.Instance.StateChanged += () =>
             DispatcherQueue.TryEnqueue(() =>
             {
-                status.Text = VoiceCommandListener.Instance.StatusMessage;
-                heard.Text = string.IsNullOrEmpty(VoiceCommandListener.Instance.LastHeardPhrase)
+                _voiceStatus.Text = VoiceCommandListener.Instance.StatusMessage;
+                _voiceHeard.Text = string.IsNullOrEmpty(VoiceCommandListener.Instance.LastHeardPhrase)
                     ? ""
                     : $"Heard: \"{VoiceCommandListener.Instance.LastHeardPhrase}\"";
             });
 
-        status.Text = VoiceCommandListener.Instance.StatusMessage;
+        _voiceStatus.Text = VoiceCommandListener.Instance.StatusMessage;
 
         return new StackPanel
         {
@@ -318,8 +320,8 @@ public sealed class SettingsPage : UserControl
             {
                 new TextBlock { Text = "Listen for \"Clippy, do your thing\" and \"Clippy, clip that\"" },
                 toggle,
-                status,
-                heard
+                _voiceStatus,
+                _voiceHeard
             }
         };
     }
@@ -340,25 +342,25 @@ public sealed class SettingsPage : UserControl
         return toggle;
     }
 
-    private UIElement CreateDebugPanel(out StackPanel logPanel, out TextBlock lastClip)
+    private UIElement CreateDebugPanel()
     {
-        logPanel = new StackPanel { Spacing = 6 };
-        lastClip = new TextBlock
+        _logPanel = new StackPanel { Spacing = 6 };
+        _lastClipSummary = new TextBlock
         {
             FontFamily = new FontFamily("Consolas"),
             FontSize = 11,
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(140, 255, 255, 255))
         };
-        lastClip.Text = ScreenRecorder.Instance.LastClipDebugSummary;
+        _lastClipSummary.Text = ScreenRecorder.Instance.LastClipDebugSummary;
 
         var refresh = new Button { Content = "Refresh diagnostics" };
         refresh.Click += (_, _) =>
         {
             ClippyDebugLog.Instance.Log("Debug", RecorderDiagnostics.Snapshot(ScreenRecorder.Instance));
             VoiceDiagnostics.LogSnapshot(VoiceCommandListener.Instance);
-            RefreshLog(logPanel);
-            lastClip.Text = ScreenRecorder.Instance.LastClipDebugSummary;
+            RefreshLog(_logPanel);
+            _lastClipSummary.Text = ScreenRecorder.Instance.LastClipDebugSummary;
         };
 
         var copy = new Button { Content = "Copy log" };
@@ -373,10 +375,10 @@ public sealed class SettingsPage : UserControl
         clear.Click += (_, _) =>
         {
             ClippyDebugLog.Instance.Clear();
-            RefreshLog(logPanel);
+            RefreshLog(_logPanel);
         };
 
-        RefreshLog(logPanel);
+        RefreshLog(_logPanel);
 
         return new StackPanel
         {
@@ -391,7 +393,7 @@ public sealed class SettingsPage : UserControl
                     Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(140, 255, 255, 255))
                 },
                 new TextBlock { Text = "Last clip attempt", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold },
-                lastClip,
+                _lastClipSummary,
                 new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
@@ -404,7 +406,7 @@ public sealed class SettingsPage : UserControl
                     Background = new SolidColorBrush(Windows.UI.Color.FromArgb(64, 0, 0, 0)),
                     CornerRadius = new CornerRadius(8),
                     Padding = new Thickness(10),
-                    Child = new ScrollViewer { Content = logPanel }
+                    Child = new ScrollViewer { Content = _logPanel }
                 }
             }
         };
@@ -434,7 +436,7 @@ public sealed class SettingsPage : UserControl
             Text = title,
             FontSize = 16,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Windows.UI.Colors.White)
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.White)
         });
         stack.Children.Add(content);
 

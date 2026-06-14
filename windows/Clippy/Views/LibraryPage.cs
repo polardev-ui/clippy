@@ -1,9 +1,12 @@
 using Clippy.Models;
 using Clippy.Services;
+using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.Storage;
 using Windows.Storage.Streams;
 
 namespace Clippy.Views;
@@ -47,7 +50,7 @@ public sealed class LibraryPage : UserControl
                         Text = "No clips yet",
                         FontSize = 22,
                         FontWeight = Microsoft.UI.Text.FontWeights.Bold,
-                        Foreground = new SolidColorBrush(Windows.UI.Colors.White),
+                        Foreground = new SolidColorBrush(Colors.White),
                         HorizontalAlignment = HorizontalAlignment.Center
                     },
                     new TextBlock
@@ -63,7 +66,10 @@ public sealed class LibraryPage : UserControl
             return;
         }
 
-        var wrap = new ItemsWrapGrid { MaximumRowsOrColumns = 3, ItemWidth = 280, ItemHeight = 220 };
+        var wrap = (ItemsPanelTemplate)XamlReader.Load(
+            "<ItemsPanelTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'>" +
+            "<ItemsWrapGrid MaximumRowsOrColumns='3' ItemWidth='280' ItemHeight='220'/>" +
+            "</ItemsPanelTemplate>");
         _grid.ItemsPanel = wrap;
         _grid.Items.Clear();
 
@@ -106,7 +112,7 @@ public sealed class LibraryPage : UserControl
             Text = clip.Title,
             Margin = new Thickness(12, 10, 12, 0),
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Windows.UI.Colors.White),
+            Foreground = new SolidColorBrush(Colors.White),
             TextTrimming = TextTrimming.CharacterEllipsis
         });
         stack.Children.Add(new TextBlock
