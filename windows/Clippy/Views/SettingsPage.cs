@@ -10,13 +10,13 @@ namespace Clippy.Views;
 
 public sealed class SettingsPage : UserControl
 {
-    private readonly StackPanel _logPanel;
-    private readonly TextBlock _lastClipSummary;
-    private readonly ComboBox _micCombo;
-    private readonly ComboBox _outputCombo;
+    private StackPanel _logPanel = null!;
+    private TextBlock _lastClipSummary = null!;
+    private ComboBox _micCombo = null!;
+    private ComboBox _outputCombo = null!;
     private readonly ComboBox _displayCombo;
-    private readonly TextBlock _voiceStatus;
-    private readonly TextBlock _voiceHeard;
+    private TextBlock _voiceStatus = null!;
+    private TextBlock _voiceHeard = null!;
 
     public SettingsPage()
     {

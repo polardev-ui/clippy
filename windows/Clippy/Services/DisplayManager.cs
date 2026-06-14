@@ -10,32 +10,30 @@ public static class DisplayManager
         var displays = new List<CaptureDisplay>();
         var index = 0;
 
-        EnumDisplayMonitors(
-            nint.Zero,
-            nint.Zero,
-            (hMonitor, _, ref RECT lprcMonitor, _) =>
+        MonitorEnumProc callback = (nint hMonitor, nint hdcMonitor, ref RECT lprcMonitor, nint dwData) =>
+        {
+            var info = new MONITORINFOEX { cbSize = Marshal.SizeOf<MONITORINFOEX>() };
+            if (GetMonitorInfo(hMonitor, ref info))
             {
-                var info = new MONITORINFOEX { cbSize = Marshal.SizeOf<MONITORINFOEX>() };
-                if (GetMonitorInfo(hMonitor, ref info))
+                var width = lprcMonitor.Right - lprcMonitor.Left;
+                var height = lprcMonitor.Bottom - lprcMonitor.Top;
+                var name = string.IsNullOrWhiteSpace(info.szDevice)
+                    ? $"Display {index + 1}"
+                    : info.szDevice.TrimEnd('\0');
+                displays.Add(new CaptureDisplay
                 {
-                    var width = lprcMonitor.Right - lprcMonitor.Left;
-                    var height = lprcMonitor.Bottom - lprcMonitor.Top;
-                    var name = string.IsNullOrWhiteSpace(info.szDevice)
-                        ? $"Display {index + 1}"
-                        : info.szDevice.TrimEnd('\0');
-                    displays.Add(new CaptureDisplay
-                    {
-                        Id = index.ToString(),
-                        Label = $"{name} — {width}×{height}",
-                        Width = width,
-                        Height = height
-                    });
-                    index++;
-                }
+                    Id = index.ToString(),
+                    Label = $"{name} — {width}×{height}",
+                    Width = width,
+                    Height = height
+                });
+                index++;
+            }
 
-                return true;
-            },
-            nint.Zero);
+            return true;
+        };
+
+        EnumDisplayMonitors(nint.Zero, nint.Zero, callback, nint.Zero);
 
         if (displays.Count == 0)
         {
