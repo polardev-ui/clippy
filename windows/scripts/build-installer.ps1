@@ -16,6 +16,9 @@ if (-not (Test-Path $Project)) {
     throw "Project not found: $Project"
 }
 
+$RepoRoot = Split-Path -Parent $Root
+& (Join-Path $PSScriptRoot "prepare-assets.ps1") -WindowsRoot $Root -RepoRoot $RepoRoot
+
 Write-Host "> dotnet --info"
 dotnet --info
 
@@ -87,6 +90,34 @@ if (-not (Test-Path $exe)) {
     throw "Clippy.exe not found in publish output: $PublishDir"
 }
 
+Write-Host "> Bundling FFmpeg"
+$ffmpegCache = Join-Path $BuildDir "ffmpeg-cache"
+$ffmpegZip = Join-Path $ffmpegCache "ffmpeg-win64.zip"
+$ffmpegExtract = Join-Path $ffmpegCache "extract"
+$ffmpegDest = Join-Path $PublishDir "ffmpeg.exe"
+New-Item -ItemType Directory -Force -Path $ffmpegCache | Out-Null
+
+if (-not (Test-Path $ffmpegDest)) {
+    if (-not (Test-Path $ffmpegZip)) {
+        $ffmpegUrl = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+        Write-Host "  Downloading FFmpeg..."
+        Invoke-WebRequest -Uri $ffmpegUrl -OutFile $ffmpegZip
+    }
+
+    if (Test-Path $ffmpegExtract) {
+        Remove-Item $ffmpegExtract -Recurse -Force
+    }
+    Expand-Archive -Path $ffmpegZip -DestinationPath $ffmpegExtract
+    $ffmpegSource = Get-ChildItem -Path $ffmpegExtract -Filter ffmpeg.exe -Recurse | Select-Object -First 1
+    if (-not $ffmpegSource) {
+        throw "ffmpeg.exe not found inside downloaded archive"
+    }
+
+    Copy-Item $ffmpegSource.FullName $ffmpegDest -Force
+}
+
+Write-Host "  Bundled: $ffmpegDest ($([math]::Round((Get-Item $ffmpegDest).Length / 1MB, 1)) MB)"
+
 Write-Host "> Published: $exe"
 
 New-Item -ItemType Directory -Force -Path $BuildDir | Out-Null
@@ -114,6 +145,25 @@ if ($Iscc) {
     Write-Host ""
     Write-Host "OK: Installer ready: $Setup" -ForegroundColor Green
     Write-Host "  Size: $([math]::Round((Get-Item $Setup).Length / 1MB, 2)) MB"
+
+    if ($env:WINDOWS_SIGN_CERT_BASE64 -and $env:WINDOWS_SIGN_CERT_PASSWORD) {
+        Write-Host "> Code signing (optional certificate provided)"
+        $signtool = Get-ChildItem -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+        if ($signtool) {
+            $pfxPath = Join-Path $BuildDir "sign-cert.pfx"
+            [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_SIGN_CERT_BASE64))
+            & $signtool.FullName sign /f $pfxPath /p $env:WINDOWS_SIGN_CERT_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 $exe
+            & $signtool.FullName sign /f $pfxPath /p $env:WINDOWS_SIGN_CERT_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 $Setup
+            Remove-Item $pfxPath -Force
+            Write-Host "  Signed Clippy.exe and ClippySetup.exe"
+        }
+        else {
+            Write-Host "  signtool.exe not found; skipping signing" -ForegroundColor Yellow
+        }
+    }
+
     exit 0
 }
 

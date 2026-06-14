@@ -1,6 +1,6 @@
 using Clippy.Models;
 using Clippy.Services;
-using Microsoft.UI;
+using Clippy.Theme;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Markup;
@@ -43,24 +43,12 @@ public sealed class LibraryPage : UserControl
                     {
                         Glyph = "\uE8B2",
                         FontSize = 54,
-                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 46, 217, 107))
+                        Foreground = ClippyTheme.AccentBrush
                     },
-                    new TextBlock
-                    {
-                        Text = "No clips yet",
-                        FontSize = 22,
-                        FontWeight = Microsoft.UI.Text.FontWeights.Bold,
-                        Foreground = new SolidColorBrush(Colors.White),
-                        HorizontalAlignment = HorizontalAlignment.Center
-                    },
-                    new TextBlock
-                    {
-                        Text = $"Press {settings.Hotkey.DisplayString} or say \"Clippy, clip that\" to save your first clip.",
-                        TextWrapping = TextWrapping.WrapWholeWords,
-                        TextAlignment = TextAlignment.Center,
-                        MaxWidth = 420,
-                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(140, 255, 255, 255))
-                    }
+                    ClippyControls.Heading("No clips yet", 22, TextAlignment.Center),
+                    ClippyControls.Caption(
+                        $"Press {settings.Hotkey.DisplayString} or say \"Clippy, clip that\" to save your first clip.",
+                        TextAlignment.Center)
                 }
             });
             return;
@@ -91,8 +79,8 @@ public sealed class LibraryPage : UserControl
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Stretch,
-            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 20, 20, 20)),
-            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(20, 255, 255, 255)),
+            Background = ClippyTheme.SurfaceBrush,
+            BorderBrush = ClippyTheme.BorderBrush,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(16),
             Padding = new Thickness(0)
@@ -112,7 +100,7 @@ public sealed class LibraryPage : UserControl
             Text = clip.Title,
             Margin = new Thickness(12, 10, 12, 0),
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Colors.White),
+            Foreground = ClippyTheme.TextPrimaryBrush,
             TextTrimming = TextTrimming.CharacterEllipsis
         });
         stack.Children.Add(new TextBlock
@@ -120,7 +108,7 @@ public sealed class LibraryPage : UserControl
             Text = $"{clip.Duration:F0}s · {clip.CreatedAt:g}",
             Margin = new Thickness(12, 4, 12, 12),
             FontSize = 12,
-            Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(140, 255, 255, 255))
+            Foreground = ClippyTheme.TextSecondaryBrush
         });
         card.Content = stack;
         card.Click += async (_, _) => await ClipDetailDialog.ShowAsync(clip, XamlRoot);

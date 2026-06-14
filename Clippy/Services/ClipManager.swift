@@ -40,7 +40,7 @@ final class ClipManager: ObservableObject {
         guard await ClipExporter.isPlayableVideo(at: sourceURL) else {
             throw ClipManagerError.unplayableExport
         }
-        let fileName = "clip_\(UUID().uuidString).mp4"
+        let fileName = "clip_\(UUID().uuidString).mov"
         let destination = ClipStorage.libraryDirectory.appendingPathComponent(fileName)
         if FileManager.default.fileExists(atPath: destination.path) {
             try FileManager.default.removeItem(at: destination)
@@ -82,7 +82,7 @@ final class ClipManager: ObservableObject {
 
     func exportClip(_ clip: Clip) {
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [.mpeg4Movie]
+        panel.allowedContentTypes = [.quickTimeMovie]
         panel.nameFieldStringValue = clip.fileName
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }

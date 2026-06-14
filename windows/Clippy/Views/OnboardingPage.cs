@@ -1,10 +1,10 @@
 using Clippy.Models;
 using Clippy.Services;
-using Microsoft.UI;
+using Clippy.Theme;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.UI;
 
 namespace Clippy.Views;
@@ -14,10 +14,11 @@ public sealed class OnboardingPage : UserControl
     private int _step;
     private int _introPage;
     private readonly StackPanel _contentHost;
-    private readonly StackPanel _progressBar;
-    private readonly Button _primaryButton;
-    private readonly Button _backButton;
-    private readonly Button _skipButton;
+    private readonly Grid _progressBar;
+    private readonly Border _primaryButtonHost;
+    private readonly TextBlock _primaryButtonLabel;
+    private readonly Border _backButtonHost;
+    private readonly Border _skipButtonHost;
 
     private const int StepCount = 5;
 
@@ -26,26 +27,41 @@ public sealed class OnboardingPage : UserControl
         MinWidth = 900;
         MinHeight = 620;
 
-        var root = new Grid
-        {
-            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 10, 10, 10))
-        };
+        var root = new Grid { Background = ClippyTheme.BackgroundBrush };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        _progressBar = new StackPanel
+        var gradient = new Border
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            Margin = new Thickness(40, 28, 40, 0)
+            Background = new RadialGradientBrush
+            {
+                Center = new Windows.Foundation.Point(0.5, 0),
+                RadiusX = 1.1,
+                RadiusY = 1.1,
+                GradientStops =
+                {
+                    new GradientStop { Color = Color.FromArgb(26, 46, 217, 107), Offset = 0 },
+                    new GradientStop { Color = Microsoft.UI.Colors.Transparent, Offset = 1 }
+                }
+            },
+            IsHitTestVisible = false
         };
+        Grid.SetRowSpan(gradient, 3);
+        root.Children.Add(gradient);
+
+        _progressBar = new Grid { Margin = new Thickness(40, 28, 40, 0) };
+        for (var i = 0; i < StepCount; i++)
+        {
+            _progressBar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        }
 
         _contentHost = new StackPanel
         {
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Center,
-            Spacing = 24
+            Spacing = 24,
+            MaxWidth = 640
         };
 
         var footer = new Grid { Margin = new Thickness(40, 0, 40, 36) };
@@ -53,29 +69,29 @@ public sealed class OnboardingPage : UserControl
         footer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        _backButton = new Button { Content = "Back", Visibility = Visibility.Collapsed };
-        _backButton.Click += (_, _) => GoBack();
-
-        _primaryButton = new Button
+        _backButtonHost = ClippyControls.CreateSecondaryButton("Back");
+        _backButtonHost.Visibility = Visibility.Collapsed;
+        if (_backButtonHost.Child is Button backButton)
         {
-            Content = "Next",
-            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 46, 217, 107)),
-            Foreground = new SolidColorBrush(Colors.Black),
-            FontWeight = Microsoft.UI.Text.FontWeights.Bold,
-            CornerRadius = new CornerRadius(999),
-            Padding = new Thickness(24, 12, 24, 12)
-        };
-        _primaryButton.Click += (_, _) => GoForward();
+            backButton.Click += (_, _) => GoBack();
+        }
 
-        _skipButton = new Button { Content = "Skip for now", Visibility = Visibility.Collapsed };
-        _skipButton.Click += (_, _) => AppCoordinator.Instance.CompleteOnboarding(fromVoiceDemo: false);
+        _primaryButtonHost = ClippyControls.CreateAccentButton("Next", (_, _) => GoForward());
+        _primaryButtonLabel = FindButtonLabel(_primaryButtonHost) ?? new TextBlock();
 
-        Grid.SetColumn(_backButton, 0);
-        Grid.SetColumn(_primaryButton, 2);
-        Grid.SetColumn(_skipButton, 2);
-        footer.Children.Add(_backButton);
-        footer.Children.Add(_primaryButton);
-        footer.Children.Add(_skipButton);
+        _skipButtonHost = ClippyControls.CreateSecondaryButton("Skip for now");
+        _skipButtonHost.Visibility = Visibility.Collapsed;
+        if (_skipButtonHost.Child is Button skipButton)
+        {
+            skipButton.Click += (_, _) => AppCoordinator.Instance.CompleteOnboarding(fromVoiceDemo: false);
+        }
+
+        Grid.SetColumn(_backButtonHost, 0);
+        Grid.SetColumn(_primaryButtonHost, 2);
+        Grid.SetColumn(_skipButtonHost, 2);
+        footer.Children.Add(_backButtonHost);
+        footer.Children.Add(_primaryButtonHost);
+        footer.Children.Add(_skipButtonHost);
 
         Grid.SetRow(_progressBar, 0);
         Grid.SetRow(_contentHost, 1);
@@ -86,6 +102,16 @@ public sealed class OnboardingPage : UserControl
 
         Content = root;
         RenderStep();
+    }
+
+    private static TextBlock? FindButtonLabel(Border host)
+    {
+        if (host.Child is Button { Content: Border { Child: TextBlock label } })
+        {
+            return label;
+        }
+
+        return null;
     }
 
     private void GoBack()
@@ -133,10 +159,10 @@ public sealed class OnboardingPage : UserControl
     {
         UpdateProgress();
         _contentHost.Children.Clear();
-        _backButton.Visibility = _step == 0 || _step == 4 ? Visibility.Collapsed : Visibility.Visible;
-        _skipButton.Visibility = _step == 4 ? Visibility.Visible : Visibility.Collapsed;
-        _primaryButton.Visibility = _step == 4 ? Visibility.Collapsed : Visibility.Visible;
-        _primaryButton.Content = _step == 3 ? "Continue" : "Next";
+        _backButtonHost.Visibility = _step == 0 || _step == 4 ? Visibility.Collapsed : Visibility.Visible;
+        _skipButtonHost.Visibility = _step == 4 ? Visibility.Visible : Visibility.Collapsed;
+        _primaryButtonHost.Visibility = _step == 4 ? Visibility.Collapsed : Visibility.Visible;
+        _primaryButtonLabel.Text = _step == 3 ? "Continue" : "Next";
 
         switch (_step)
         {
@@ -153,80 +179,66 @@ public sealed class OnboardingPage : UserControl
         _progressBar.Children.Clear();
         for (var i = 0; i < StepCount; i++)
         {
-            _progressBar.Children.Add(new Border
+            var segment = new Border
             {
                 Height = 4,
-                Width = 120,
+                Margin = new Thickness(i == 0 ? 0 : 4, 0, 0, 0),
                 CornerRadius = new CornerRadius(999),
-                Background = new SolidColorBrush(i <= _step
-                    ? Windows.UI.Color.FromArgb(255, 46, 217, 107)
-                    : Windows.UI.Color.FromArgb(20, 255, 255, 255))
-            });
+                Background = new SolidColorBrush(i <= _step ? ClippyTheme.Accent : ClippyTheme.Border)
+            };
+            Grid.SetColumn(segment, i);
+            _progressBar.Children.Add(segment);
         }
     }
 
     private void ShowWelcome()
     {
-        _contentHost.Children.Add(CreateLogo(120));
-        _contentHost.Children.Add(new TextBlock
-        {
-            Text = "Welcome to Clippy!",
-            FontSize = 42,
-            FontWeight = Microsoft.UI.Text.FontWeights.Bold,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Foreground = new SolidColorBrush(Colors.White)
-        });
-        _contentHost.Children.Add(new TextBlock
-        {
-            Text = "Your instant replay button for Windows.",
-            FontSize = 20,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(140, 255, 255, 255))
-        });
+        _contentHost.Children.Add(ClippyControls.CreateLogoBadge(120, glow: true));
+        _contentHost.Children.Add(ClippyControls.Heading("Welcome to Clippy!", 42, TextAlignment.Center));
+        _contentHost.Children.Add(ClippyControls.Caption("Your instant replay button for Windows.", TextAlignment.Center));
     }
 
     private void ShowIntro()
     {
         var cards = new[]
         {
-            ("Always buffering", "Clippy quietly records the last minute of your screen in the background — ready whenever you need it."),
-            ("Clip in an instant", "Save the last 15–60 seconds with a hotkey, button tap, or voice command."),
-            ("Just say the word", "Try \"Clippy, clip that\" anytime. Clippy captures your screen, system audio, and microphone together.")
+            ("\uE823", "Always buffering", "Clippy quietly records the last minute of your screen in the background — ready whenever you need it."),
+            ("\uE714", "Clip in an instant", "Save the last 15–60 seconds with a hotkey, button tap, or voice command."),
+            ("\uE9D9", "Just say the word", "Try \"Clippy, clip that\" anytime. Clippy captures your screen, system audio, and microphone together.")
         };
 
-        var (title, body) = cards[_introPage];
-        _contentHost.Children.Add(CreateLogo(88));
-        _contentHost.Children.Add(new Border
+        var (icon, title, body) = cards[_introPage];
+        _contentHost.Children.Add(ClippyControls.CreateLogoBadge(88));
+        _contentHost.Children.Add(CreateIntroCard(icon, title, body));
+    }
+
+    private static Border CreateIntroCard(string iconGlyph, string title, string body)
+    {
+        return new Border
         {
             MaxWidth = 520,
             Padding = new Thickness(28),
-            CornerRadius = new CornerRadius(16),
-            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 20, 20, 20)),
-            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(100, 46, 217, 107)),
+            CornerRadius = ClippyTheme.CardRadius,
+            Background = ClippyTheme.SurfaceBrush,
+            BorderBrush = new SolidColorBrush(Color.FromArgb(100, 46, 217, 107)),
             BorderThickness = new Thickness(1),
             Child = new StackPanel
             {
                 Spacing = 14,
                 Children =
                 {
-                    new TextBlock
+                    new FontIcon
                     {
-                        Text = title,
-                        FontSize = 22,
-                        FontWeight = Microsoft.UI.Text.FontWeights.Bold,
-                        HorizontalAlignment = HorizontalAlignment.Center,
-                        Foreground = new SolidColorBrush(Colors.White)
+                        Glyph = iconGlyph,
+                        FontSize = 28,
+                        Foreground = ClippyTheme.AccentBrush,
+                        HorizontalAlignment = HorizontalAlignment.Center
                     },
-                    new TextBlock
-                    {
-                        Text = body,
-                        TextWrapping = TextWrapping.WrapWholeWords,
-                        TextAlignment = TextAlignment.Center,
-                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(140, 255, 255, 255))
-                    }
+                    ClippyControls.Heading(title, 22, TextAlignment.Center),
+                    ClippyControls.Caption(body, TextAlignment.Center)
                 }
             }
-        });
+        };
     }
 
     private void ShowMicPicker() => ShowDevicePicker(
@@ -254,13 +266,17 @@ public sealed class OnboardingPage : UserControl
         {
             Width = 360,
             HorizontalAlignment = HorizontalAlignment.Center,
-            DisplayMemberPath = "Name"
+            DisplayMemberPath = "Name",
+            RequestedTheme = ElementTheme.Dark
         };
 
         foreach (var device in devices)
         {
             combo.Items.Add(device);
-            if (device.Id == selectedId) combo.SelectedItem = device;
+            if (device.Id == selectedId)
+            {
+                combo.SelectedItem = device;
+            }
         }
 
         combo.SelectionChanged += (_, _) =>
@@ -272,64 +288,32 @@ public sealed class OnboardingPage : UserControl
             }
         };
 
-        _contentHost.Children.Add(new TextBlock
-        {
-            Text = title,
-            FontSize = 28,
-            FontWeight = Microsoft.UI.Text.FontWeights.Bold,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Foreground = new SolidColorBrush(Colors.White)
-        });
-        _contentHost.Children.Add(new TextBlock
-        {
-            Text = subtitle,
-            TextWrapping = TextWrapping.WrapWholeWords,
-            TextAlignment = TextAlignment.Center,
-            MaxWidth = 480,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(140, 255, 255, 255))
-        });
+        _contentHost.Children.Add(ClippyControls.Heading(title, 28, TextAlignment.Center));
+        _contentHost.Children.Add(ClippyControls.Caption(subtitle, TextAlignment.Center));
         _contentHost.Children.Add(combo);
     }
 
     private void ShowVoicePractice()
     {
-        _contentHost.Children.Add(CreateLogo(96));
-        _contentHost.Children.Add(new TextBlock
-        {
-            Text = "Onboarding complete!",
-            FontSize = 34,
-            FontWeight = Microsoft.UI.Text.FontWeights.Bold,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Foreground = new SolidColorBrush(Colors.White)
-        });
-        _contentHost.Children.Add(new TextBlock
-        {
-            Text = "Welcome to Clippy. To begin, just say:",
-            FontSize = 20,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(140, 255, 255, 255))
-        });
+        _contentHost.Children.Add(ClippyControls.CreateLogoBadge(96, glow: true));
+        _contentHost.Children.Add(ClippyControls.Heading("Onboarding complete!", 34, TextAlignment.Center));
+        _contentHost.Children.Add(ClippyControls.Caption("Welcome to Clippy. To begin, just say:", TextAlignment.Center));
         _contentHost.Children.Add(new Border
         {
             Padding = new Thickness(24, 14, 24, 14),
             CornerRadius = new CornerRadius(14),
-            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(30, 46, 217, 107)),
+            Background = new SolidColorBrush(Color.FromArgb(30, 46, 217, 107)),
             Child = new TextBlock
             {
                 Text = "“Clippy, clip that”",
                 FontSize = 28,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 46, 217, 107))
+                Foreground = ClippyTheme.AccentBrush,
+                HorizontalAlignment = HorizontalAlignment.Center
             }
         });
 
-        var heard = new TextBlock
-        {
-            FontSize = 12,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(140, 255, 255, 255))
-        };
+        var heard = ClippyControls.Caption("", TextAlignment.Center);
         VoiceCommandListener.Instance.StateChanged += () =>
             DispatcherQueue.TryEnqueue(() =>
             {
@@ -340,17 +324,5 @@ public sealed class OnboardingPage : UserControl
 
         _contentHost.Children.Add(heard);
         AppCoordinator.Instance.BeginOnboardingVoicePractice();
-    }
-
-    private static Image CreateLogo(int size)
-    {
-        var path = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "clippy-logo.png");
-        return new Image
-        {
-            Width = size,
-            Height = size,
-            Source = File.Exists(path) ? new BitmapImage(new Uri(path)) : null,
-            HorizontalAlignment = HorizontalAlignment.Center
-        };
     }
 }

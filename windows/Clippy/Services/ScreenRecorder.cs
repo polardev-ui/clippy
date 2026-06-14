@@ -44,7 +44,7 @@ public sealed class ScreenRecorder
 
         if (FfmpegLocator.Path == null)
         {
-            StatusMessage = "FFmpeg not found — install FFmpeg and add it to PATH.";
+            StatusMessage = "Recording engine missing — reinstall Clippy.";
             NotifyStateChanged();
             return;
         }
@@ -135,7 +135,7 @@ public sealed class ScreenRecorder
                 needed -= sourceSegments[i].Duration;
             }
 
-            var exportPath = Path.Combine(ClipStorage.BufferDirectory, $"export_{Guid.NewGuid():N}.mp4");
+            var exportPath = Path.Combine(ClipStorage.BufferDirectory, $"export_{Guid.NewGuid():N}.mov");
             await ClipExporter.ExportAsync(selected, maxDuration, exportPath);
 
             LastClipDebugSummary =

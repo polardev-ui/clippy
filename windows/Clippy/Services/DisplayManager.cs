@@ -20,13 +20,15 @@ public static class DisplayManager
                 var name = string.IsNullOrWhiteSpace(info.szDevice)
                     ? $"Display {index + 1}"
                     : info.szDevice.TrimEnd('\0');
-                displays.Add(new CaptureDisplay
-                {
-                    Id = index.ToString(),
-                    Label = $"{name} — {width}×{height}",
-                    Width = width,
-                    Height = height
-                });
+                    displays.Add(new CaptureDisplay
+                    {
+                        Id = index.ToString(),
+                        Label = $"{name} — {width}×{height}",
+                        Width = width,
+                        Height = height,
+                        OffsetX = lprcMonitor.Left,
+                        OffsetY = lprcMonitor.Top
+                    });
                 index++;
             }
 
@@ -42,7 +44,9 @@ public static class DisplayManager
                 Id = "0",
                 Label = "Primary Display",
                 Width = 1920,
-                Height = 1080
+                Height = 1080,
+                OffsetX = 0,
+                OffsetY = 0
             });
         }
 

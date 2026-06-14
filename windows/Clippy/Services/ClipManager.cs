@@ -44,7 +44,7 @@ public sealed class ClipManager
             throw new InvalidOperationException("The exported clip could not be verified as playable video.");
         }
 
-        var fileName = $"clip_{Guid.NewGuid():N}.mp4";
+        var fileName = $"clip_{Guid.NewGuid():N}.mov";
         var destination = Path.Combine(ClipStorage.LibraryDirectory, fileName);
         if (File.Exists(destination)) File.Delete(destination);
         File.Copy(sourcePath, destination, overwrite: true);
@@ -101,7 +101,7 @@ public sealed class ClipManager
         WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
         picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.VideosLibrary;
         picker.SuggestedFileName = clip.FileName;
-        picker.FileTypeChoices.Add("MP4 Video", new List<string> { ".mp4" });
+        picker.FileTypeChoices.Add("QuickTime Movie", new List<string> { ".mov" });
 
         var file = await picker.PickSaveFileAsync();
         if (file == null) return;

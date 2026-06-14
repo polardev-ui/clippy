@@ -12,6 +12,7 @@ public static class ClippyTheme
     public static Color SurfaceElevated => Color.FromArgb(255, 31, 31, 31);
     public static Color Accent => Color.FromArgb(255, 46, 217, 107);
     public static Color AccentDim => Color.FromArgb(255, 31, 140, 71);
+    public static Color AccentGlow => Color.FromArgb(89, 46, 217, 107);
     public static Color TextPrimary => Colors.White;
     public static Color TextSecondary => Color.FromArgb(140, 255, 255, 255);
     public static Color Border => Color.FromArgb(20, 255, 255, 255);
@@ -21,6 +22,7 @@ public static class ClippyTheme
     public static SolidColorBrush SurfaceElevatedBrush => new(SurfaceElevated);
     public static SolidColorBrush AccentBrush => new(Accent);
     public static SolidColorBrush AccentDimBrush => new(AccentDim);
+    public static SolidColorBrush AccentGlowBrush => new(AccentGlow);
     public static SolidColorBrush TextPrimaryBrush => new(TextPrimary);
     public static SolidColorBrush TextSecondaryBrush => new(TextSecondary);
     public static SolidColorBrush BorderBrush => new(Border);

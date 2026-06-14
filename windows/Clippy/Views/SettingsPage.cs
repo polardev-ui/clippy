@@ -1,6 +1,6 @@
 using Clippy.Models;
 using Clippy.Services;
-using Microsoft.UI;
+using Clippy.Theme;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -23,14 +23,14 @@ public sealed class SettingsPage : UserControl
         var scroll = new ScrollViewer();
         var root = new StackPanel { Spacing = 18, Padding = new Thickness(28) };
 
-        root.Children.Add(CreateSection("Clip Length", CreateClipDurationPicker()));
-        root.Children.Add(CreateSection("Video Quality", CreateQualityPicker()));
-        root.Children.Add(CreateSection("Display", _displayCombo = CreateDisplayPicker()));
-        root.Children.Add(CreateSection("Keyboard Shortcut", CreateHotkeyPanel()));
-        root.Children.Add(CreateSection("Audio", CreateAudioPanel()));
-        root.Children.Add(CreateSection("Voice Commands", CreateVoicePanel()));
-        root.Children.Add(CreateSection("Feedback", CreateSoundToggle()));
-        root.Children.Add(CreateSection("Debug Log", CreateDebugPanel()));
+        root.Children.Add(ClippyControls.CreateSection("Clip Length", CreateClipDurationPicker(), "\uE823"));
+        root.Children.Add(ClippyControls.CreateSection("Video Quality", CreateQualityPicker(), "\uE714"));
+        root.Children.Add(ClippyControls.CreateSection("Display", _displayCombo = CreateDisplayPicker(), "\uE7F4"));
+        root.Children.Add(ClippyControls.CreateSection("Keyboard Shortcut", CreateHotkeyPanel(), "\uE765"));
+        root.Children.Add(ClippyControls.CreateSection("Audio", CreateAudioPanel(), "\uE767"));
+        root.Children.Add(ClippyControls.CreateSection("Voice Commands", CreateVoicePanel(), "\uE9D9"));
+        root.Children.Add(ClippyControls.CreateSection("Feedback", CreateSoundToggle(), "\uE767"));
+        root.Children.Add(ClippyControls.CreateSection("Debug Log", CreateDebugPanel(), "\uE7BA"));
 
         scroll.Content = root;
         Content = scroll;
@@ -89,73 +89,48 @@ public sealed class SettingsPage : UserControl
 
     private UIElement CreateClipDurationPicker()
     {
-        var panel = new StackPanel { Spacing = 8 };
-        var group = new RadioButtons();
-        foreach (var duration in ClipDurationExtensions.All)
+        var durations = ClipDurationExtensions.All.ToList();
+        var picker = new SegmentedPicker(
+            durations.Select(d => d.Label()).ToList(),
+            durations.Cast<object>().ToList(),
+            AppSettings.Instance.ClipDuration switch
+            {
+                ClipDuration.Fifteen => 0,
+                ClipDuration.Sixty => 2,
+                _ => 1
+            });
+        picker.SelectionChanged += tag =>
         {
-            group.Items.Add(new ComboBoxItem { Content = duration.Label(), Tag = duration });
-        }
-
-        group.SelectedIndex = AppSettings.Instance.ClipDuration switch
-        {
-            ClipDuration.Fifteen => 0,
-            ClipDuration.Sixty => 2,
-            _ => 1
-        };
-
-        group.SelectionChanged += (_, _) =>
-        {
-            if (group.SelectedItem is ComboBoxItem { Tag: ClipDuration d })
+            if (tag is ClipDuration d)
             {
                 AppSettings.Instance.ClipDuration = d;
                 AppSettings.Instance.Persist();
             }
         };
 
-        panel.Children.Add(group);
-        panel.Children.Add(new TextBlock
-        {
-            Text = "Clips use up to this length. If the buffer has less, Clippy saves whatever is available.",
-            FontSize = 12,
-            Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(140, 255, 255, 255))
-        });
+        var panel = new StackPanel { Spacing = 8 };
+        panel.Children.Add(picker);
+        panel.Children.Add(ClippyControls.Caption(
+            "Clips use up to this length. If the buffer has less, Clippy saves whatever is available."));
         return panel;
     }
 
     private UIElement CreateQualityPicker()
     {
-        var panel = new StackPanel { Spacing = 10 };
-        var resCombo = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
-        foreach (var res in CaptureResolutionExtensions.All)
+        var resolutions = CaptureResolutionExtensions.All.ToList();
+        var resPicker = new SegmentedPicker(
+            resolutions.Select(r => r.Label()).ToList(),
+            resolutions.Cast<object>().ToList(),
+            AppSettings.Instance.CaptureResolution switch
+            {
+                CaptureResolution.P360 => 0,
+                CaptureResolution.P1080 => 2,
+                CaptureResolution.P1440 => 3,
+                _ => 1
+            });
+        resPicker.SelectionChanged += tag =>
         {
-            resCombo.Items.Add(new ComboBoxItem { Content = res.Label(), Tag = res });
-        }
-
-        resCombo.SelectedIndex = AppSettings.Instance.CaptureResolution switch
-        {
-            CaptureResolution.P360 => 0,
-            CaptureResolution.P1080 => 2,
-            CaptureResolution.P1440 => 3,
-            _ => 1
-        };
-
-        var fpsCombo = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
-        foreach (var fps in CaptureFrameRateExtensions.All)
-        {
-            fpsCombo.Items.Add(new ComboBoxItem { Content = fps.Label(), Tag = fps });
-        }
-
-        fpsCombo.SelectedIndex = AppSettings.Instance.CaptureFrameRate switch
-        {
-            CaptureFrameRate.Fps15 => 0,
-            CaptureFrameRate.Fps60 => 2,
-            CaptureFrameRate.Fps120 => 3,
-            _ => 1
-        };
-
-        resCombo.SelectionChanged += (_, _) =>
-        {
-            if (resCombo.SelectedItem is ComboBoxItem { Tag: CaptureResolution r })
+            if (tag is CaptureResolution r)
             {
                 AppSettings.Instance.CaptureResolution = r;
                 AppSettings.Instance.Persist();
@@ -163,9 +138,20 @@ public sealed class SettingsPage : UserControl
             }
         };
 
-        fpsCombo.SelectionChanged += (_, _) =>
+        var frameRates = CaptureFrameRateExtensions.All.ToList();
+        var fpsPicker = new SegmentedPicker(
+            frameRates.Select(f => f.Label()).ToList(),
+            frameRates.Cast<object>().ToList(),
+            AppSettings.Instance.CaptureFrameRate switch
+            {
+                CaptureFrameRate.Fps15 => 0,
+                CaptureFrameRate.Fps60 => 2,
+                CaptureFrameRate.Fps120 => 3,
+                _ => 1
+            });
+        fpsPicker.SelectionChanged += tag =>
         {
-            if (fpsCombo.SelectedItem is ComboBoxItem { Tag: CaptureFrameRate f })
+            if (tag is CaptureFrameRate f)
             {
                 AppSettings.Instance.CaptureFrameRate = f;
                 AppSettings.Instance.Persist();
@@ -173,10 +159,23 @@ public sealed class SettingsPage : UserControl
             }
         };
 
-        panel.Children.Add(new TextBlock { Text = "Resolution", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
-        panel.Children.Add(resCombo);
-        panel.Children.Add(new TextBlock { Text = "Frame rate", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
-        panel.Children.Add(fpsCombo);
+        var panel = new StackPanel { Spacing = 10 };
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Resolution",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = ClippyTheme.TextPrimaryBrush
+        });
+        panel.Children.Add(resPicker);
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Frame rate",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = ClippyTheme.TextPrimaryBrush
+        });
+        panel.Children.Add(fpsPicker);
+        panel.Children.Add(ClippyControls.Caption(
+            "Default is 720p at 30 fps to keep Clippy light on your system. Higher settings use more CPU and disk."));
         return panel;
     }
 
@@ -426,28 +425,5 @@ public sealed class SettingsPage : UserControl
                 Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(140, 255, 255, 255))
             });
         }
-    }
-
-    private static Border CreateSection(string title, UIElement content)
-    {
-        var stack = new StackPanel { Spacing = 12 };
-        stack.Children.Add(new TextBlock
-        {
-            Text = title,
-            FontSize = 16,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Microsoft.UI.Colors.White)
-        });
-        stack.Children.Add(content);
-
-        return new Border
-        {
-            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 20, 20, 20)),
-            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(20, 255, 255, 255)),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(16),
-            Padding = new Thickness(18),
-            Child = stack
-        };
     }
 }

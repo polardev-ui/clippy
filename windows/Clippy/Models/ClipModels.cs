@@ -157,6 +157,8 @@ public sealed class CaptureDisplay
     public required string Label { get; init; }
     public int Width { get; init; }
     public int Height { get; init; }
+    public int OffsetX { get; init; }
+    public int OffsetY { get; init; }
 }
 
 public sealed class AudioDevice

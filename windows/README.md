@@ -7,9 +7,10 @@ Built with **WinUI 3**, **.NET 10**, **FFmpeg**, **NAudio**, and **Windows Speec
 ## Requirements
 
 - Windows 10 version 19041 (2004) or later — **Windows 11 recommended**
-- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
-- [FFmpeg](https://ffmpeg.org/download.html) on `PATH` or at `C:\ffmpeg\bin\ffmpeg.exe`
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) (build only)
 - Visual Studio 2022 with **Windows application development** workload (or `dotnet build` from CLI)
+
+**End users do not install FFmpeg or .NET separately.** The installer ships a self-contained app with FFmpeg bundled.
 
 ## Build the installer (Windows only)
 
@@ -20,6 +21,13 @@ cd windows
 .\scripts\build-installer.ps1
 ```
 
+The build script:
+
+1. Prepares logo, icon, and sound assets
+2. Publishes a self-contained `Clippy.exe`
+3. Downloads and bundles `ffmpeg.exe` next to the app
+4. Creates `ClippySetup.exe` with Inno Setup
+
 Output: `windows/build/ClippySetup.exe`
 
 Requires [Inno Setup 6](https://jrsoftware.org/isdl.php). If Inno Setup is not installed, the script falls back to a portable ZIP at `windows/build/Clippy-win-x64.zip`.
@@ -28,43 +36,31 @@ Requires [Inno Setup 6](https://jrsoftware.org/isdl.php). If Inno Setup is not i
 
 You do **not** need a local Windows build machine. GitHub builds the installer on `windows-latest` and uploads it as an artifact.
 
-1. Push this repo to GitHub (e.g. `https://github.com/polardev-ui/clippy`)
-2. Open the repo on GitHub → **Actions**
-3. Select **Windows Installer** in the left sidebar
-4. Click **Run workflow** → **Run workflow** (manual run works even before anything is on `main`)
-5. Wait for the green checkmark (~5–10 min)
-6. Open the completed run → scroll to **Artifacts** → download **ClippySetup-win-x64**
-
-The artifact contains `ClippySetup.exe`. Artifacts are kept for 30 days.
+1. Push this repo to GitHub
+2. Open the repo → **Actions** → **Windows Installer** → **Run workflow**
+3. Download **ClippySetup-win-x64** from Artifacts (~5–10 min build)
 
 Pushes to `main`/`master` that change files under `windows/` also trigger this workflow automatically.
 
-**First-time push example:**
+### Optional code signing (SmartScreen / Defender)
 
-```bash
-git add .
-git commit -m "Add Windows port and GitHub Actions installer build"
-git remote add origin https://github.com/polardev-ui/clippy.git
-git push -u origin main
-```
+Unsigned Windows apps often trigger **Microsoft Defender SmartScreen** (“Windows protected your PC”) until they build reputation. This is normal for new indie releases.
 
-Then go to **Actions** → **Windows Installer** → **Run workflow**.
+To reduce warnings for users:
 
-## Build (app only)
+1. **Sign both** `Clippy.exe` and `ClippySetup.exe` with an Authenticode certificate (Standard or EV code signing).
+2. **EV code signing** gives immediate SmartScreen reputation in most cases.
+3. Set GitHub Actions secrets for automated signing:
+   - `WINDOWS_SIGN_CERT_BASE64` — PFX file, base64-encoded
+   - `WINDOWS_SIGN_CERT_PASSWORD` — PFX password
 
-```powershell
-cd windows
-dotnet restore Clippy.sln
-dotnet build Clippy.sln -c Release
-```
+The build script signs automatically when those secrets are present.
 
-Run:
+Additional steps that help over time:
 
-```powershell
-dotnet run --project Clippy\Clippy.csproj -c Release
-```
-
-Output: `Clippy\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\`
+- Publish releases from a consistent domain (e.g. [clippy.asia](https://clippy.asia))
+- Keep the same publisher name in the installer and certificate
+- If Defender flags a build as a false positive, submit the file at [Microsoft Security Intelligence](https://www.microsoft.com/en-us/wdsi/filesubmission)
 
 ## First launch
 
@@ -77,15 +73,15 @@ Output: `Clippy\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\`
 
 | Feature | Windows |
 |--------|---------|
-| Rolling 60s buffer (5s segments) | ✅ FFmpeg + gdigrab + WASAPI loopback |
-| Clip 15s / 30s / 60s | ✅ |
-| Global hotkey | ✅ Ctrl+K (RegisterHotKey) |
-| Voice commands | ✅ Windows Speech Recognition |
-| System + mic audio | ✅ WASAPI loopback + DirectShow mic |
-| Clip library | ✅ `%LocalAppData%\Clippy\Clips` |
-| Onboarding | ✅ |
-| Debug log | ✅ |
-| Dark green UI | ✅ |
+| Rolling 60s buffer (5s segments) | FFmpeg + gdigrab + WASAPI loopback |
+| Clip 15s / 30s / 60s | Segmented picker |
+| Global hotkey | Ctrl+K (RegisterHotKey) |
+| Voice commands | Windows Speech Recognition |
+| System + mic audio | WASAPI loopback + DirectShow mic |
+| Clip library | `%LocalAppData%\Clippy\Clips` |
+| Onboarding | Multi-step flow matching macOS |
+| Debug log | In-app diagnostics panel |
+| Dark green UI | Shared Clippy theme |
 
 ## Data locations
 
@@ -97,29 +93,19 @@ Output: `Clippy\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\`
   Clips\           # saved clips
 ```
 
-## FFmpeg
-
-Screen capture uses FFmpeg:
+## Capture stack
 
 - **Video:** `gdigrab` (desktop)
 - **System audio:** `wasapi` loopback (default output device)
 - **Microphone:** DirectShow (`dshow`)
 
-Install FFmpeg and verify:
-
-```powershell
-ffmpeg -version
-```
-
-You can also place `ffmpeg.exe` next to `Clippy.exe`.
+FFmpeg is bundled at `{app}\ffmpeg.exe` and detected automatically.
 
 ## Known differences from macOS
 
 - Default hotkey is **Ctrl+K** instead of ⌘K
 - Custom hotkey recording UI is simplified (reset to Ctrl+K); full key capture coming later
 - Capture uses FFmpeg rather than ScreenCaptureKit / AVFoundation
-- Requires FFmpeg as an external dependency
-- Display selection uses monitor index (not per-display SCStream)
 
 ## License
 

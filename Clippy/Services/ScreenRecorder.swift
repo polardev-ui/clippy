@@ -863,7 +863,7 @@ final class ScreenRecorder: NSObject, ObservableObject {
 
         let availableDuration = sourceSegments.reduce(0) { $0 + $1.duration }
         let targetDuration = min(maxDuration, availableDuration)
-        let exportURL = bufferDirectory.appendingPathComponent("export_\(UUID().uuidString).mp4")
+        let exportURL = bufferDirectory.appendingPathComponent("export_\(UUID().uuidString).mov")
 
         logRecorder("Exporting \(sourceSegments.count) segment(s), available=\(String(format: "%.2f", availableDuration))s target=\(String(format: "%.2f", targetDuration))s")
 

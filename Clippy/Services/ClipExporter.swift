@@ -203,9 +203,9 @@ enum ClipExporter {
 
         for preset in [AVAssetExportPresetPassthrough, AVAssetExportPreset1280x720, AVAssetExportPresetHighestQuality] {
             guard let exporter = AVAssetExportSession(asset: composition, presetName: preset),
-                  exporter.supportedFileTypes.contains(.mp4) else { continue }
+                  exporter.supportedFileTypes.contains(.mov) else { continue }
             exporter.outputURL = outputURL
-            exporter.outputFileType = .mp4
+            exporter.outputFileType = .mov
             exporter.timeRange = timeRange
             if audioMix != nil {
                 exporter.audioMix = audioMix
@@ -241,7 +241,7 @@ enum ClipExporter {
         var skipRemaining = skipSeconds
         var writeRemaining = keepSeconds
 
-        let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
+        let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mov)
         writer.shouldOptimizeForNetworkUse = false
 
         var videoInput: AVAssetWriterInput?
@@ -354,7 +354,7 @@ enum ClipExporter {
         var skipRemaining = skipSeconds
         var writeRemaining = keepSeconds
 
-        let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
+        let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mov)
         writer.shouldOptimizeForNetworkUse = false
 
         var videoInput: AVAssetWriterInput?

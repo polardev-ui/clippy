@@ -29,6 +29,12 @@ public sealed partial class MainWindow : Window
         var appWindow = AppWindow.GetFromWindowId(windowId);
         appWindow.Resize(new SizeInt32(980, 680));
 
+        var iconPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "clippy-icon.ico");
+        if (System.IO.File.Exists(iconPath))
+        {
+            appWindow.SetIcon(iconPath);
+        }
+
         SubclassWindow(hwnd);
         AppCoordinator.Instance.Bootstrap(hwnd);
 

@@ -176,6 +176,8 @@ public sealed class CaptureSettings
 
         return new CaptureSettings
         {
+            OffsetX = display.OffsetX,
+            OffsetY = display.OffsetY,
             Width = width,
             Height = height,
             FrameRate = (int)settings.CaptureFrameRate,

@@ -9,6 +9,10 @@
   #define BuildDir "..\build"
 #endif
 
+#ifndef SourceRoot
+  #define SourceRoot "..\Clippy"
+#endif
+
 #define MyAppName "Clippy"
 #define MyAppVersion "1.1.0"
 #define MyAppPublisher "Clippy"
@@ -28,6 +32,7 @@ DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir={#BuildDir}
 OutputBaseFilename=ClippySetup
+SetupIconFile={#SourceRoot}\Assets\clippy-icon.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
@@ -55,4 +60,4 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [Messages]
-WelcomeLabel2=This will install [name/ver] on your computer.%n%nClippy buffers your screen in the background and saves instant clips with Ctrl+K or voice commands.%n%nNote: FFmpeg must be installed separately and available on PATH for recording to work.
+WelcomeLabel2=This will install [name/ver] on your computer.%n%nClippy buffers your screen in the background and saves instant clips with Ctrl+K or voice commands.%n%nEverything you need is included — no extra setup required.
