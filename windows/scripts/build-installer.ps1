@@ -20,10 +20,11 @@ Write-Host "> dotnet --info"
 dotnet --info
 
 Write-Host "> Installed SDKs:"
-dotnet --list-sdks
+$installedSdks = dotnet --list-sdks
+$installedSdks
 
-$sdkList = dotnet --list-sdks
-if ($sdkList -notmatch "10\.") {
+$hasDotNet10 = @($installedSdks | Select-String -Pattern '^\s*10\.' -Quiet) -contains $true
+if (-not $hasDotNet10) {
     Write-Host ""
     Write-Host "ERROR: .NET 10 SDK not found." -ForegroundColor Red
     Write-Host "This project targets net10.0-windows. Install .NET 10 SDK:" -ForegroundColor Yellow
