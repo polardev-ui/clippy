@@ -1,0 +1,72 @@
+name: Windows Installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - "windows/**"
+      - ".github/workflows/windows-installer.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-installer:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Show toolchain
+        shell: pwsh
+        run: |
+          dotnet --info
+          dotnet --list-sdks
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Build installer
+        shell: pwsh
+        run: ./windows/scripts/build-installer.ps1
+
+      - name: Upload ClippySetup.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClippySetup-win-x64
+          path: windows/build/ClippySetup.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload portable ZIP fallback
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: Clippy-portable-win-x64
+          path: windows/build/Clippy-win-x64.zip
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Job summary
+        if: success()
+        shell: pwsh
+        run: |
+          $setup = Get-Item "windows/build/ClippySetup.exe"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value @"
+          ## Clippy Windows installer built
+
+          - **File:** ClippySetup.exe
+          - **Size:** $([math]::Round($setup.Length / 1MB, 2)) MB
+
+          Download it from this workflow run under **Artifacts** -> **ClippySetup-win-x64**.
+          "@
