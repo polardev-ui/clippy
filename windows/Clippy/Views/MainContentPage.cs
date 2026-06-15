@@ -143,8 +143,8 @@ public sealed class MainContentPage : UserControl
         _libraryTab.Tag = 0;
         _settingsTab.Tag = 1;
 
-        _durationBadge = ClippyControls.Caption("Last 15s");
-        var durationPill = ClippyControls.CreatePill(_durationBadge, ClippyTheme.SurfaceBrush);
+        _durationBadge = ClippyControls.Caption("Last 15s", TextAlignment.Center);
+        var durationPill = ClippyControls.CreateBadge(_durationBadge, ClippyTheme.SurfaceBrush);
         var tabBar = new Grid { Padding = new Thickness(28, 0, 28, 16) };
         tabBar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         tabBar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -153,6 +153,7 @@ public sealed class MainContentPage : UserControl
         Grid.SetColumn(_libraryTab, 0);
         Grid.SetColumn(_settingsTab, 1);
         Grid.SetColumn(durationPill, 3);
+        durationPill.VerticalAlignment = VerticalAlignment.Center;
         tabBar.Children.Add(_libraryTab);
         tabBar.Children.Add(_settingsTab);
         tabBar.Children.Add(durationPill);

@@ -107,6 +107,7 @@ public sealed class OnboardingPage : UserControl
 
         Content = root;
         RenderStep();
+        ClippyAnimations.AnimateContentIn(_contentHost, DispatcherQueue);
     }
 
     private static TextBlock? FindButtonLabel(Border host)
@@ -177,6 +178,12 @@ public sealed class OnboardingPage : UserControl
             case 3: ShowOutputPicker(); break;
             case 4: ShowVoicePractice(); break;
         }
+
+        ClippyAnimations.AnimateContentIn(_contentHost, DispatcherQueue);
+        if (_step == 0 && _contentHost.Children.FirstOrDefault() is FrameworkElement logo)
+        {
+            ClippyAnimations.PulseLogo(logo, DispatcherQueue);
+        }
     }
 
     private void UpdateProgress()
@@ -193,6 +200,7 @@ public sealed class OnboardingPage : UserControl
             };
             Grid.SetColumn(segment, i);
             _progressBar.Children.Add(segment);
+            ClippyAnimations.AnimateProgressSegment(segment);
         }
     }
 

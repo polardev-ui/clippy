@@ -100,8 +100,35 @@ public static class ClippyControls
             FontSize = 12,
             TextWrapping = TextWrapping.WrapWholeWords,
             TextAlignment = alignment,
+            HorizontalAlignment = alignment switch
+            {
+                TextAlignment.Center => HorizontalAlignment.Center,
+                TextAlignment.Right => HorizontalAlignment.Right,
+                _ => HorizontalAlignment.Left
+            },
+            VerticalAlignment = VerticalAlignment.Center,
             Foreground = ClippyTheme.TextSecondaryBrush
         };
+
+    public static Border CreateBadge(TextBlock label, Brush? background = null)
+    {
+        label.HorizontalAlignment = HorizontalAlignment.Center;
+        label.VerticalAlignment = VerticalAlignment.Center;
+        label.TextAlignment = TextAlignment.Center;
+
+        return new Border
+        {
+            Background = background ?? ClippyTheme.SurfaceBrush,
+            BorderBrush = ClippyTheme.BorderBrush,
+            BorderThickness = new Thickness(1),
+            CornerRadius = ClippyTheme.ButtonRadius,
+            Padding = new Thickness(14, 0, 14, 0),
+            MinHeight = ClippyTheme.ControlHeight,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = label
+        };
+    }
 
     public static TextBlock Heading(string text, double size = 28, TextAlignment alignment = TextAlignment.Left) =>
         new()
