@@ -116,6 +116,14 @@ public static class ClippyControls
         label.VerticalAlignment = VerticalAlignment.Center;
         label.TextAlignment = TextAlignment.Center;
 
+        var content = new Grid
+        {
+            MinHeight = ClippyTheme.ControlHeight - 2,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            Children = { label }
+        };
+
         return new Border
         {
             Background = background ?? ClippyTheme.SurfaceBrush,
@@ -126,7 +134,7 @@ public static class ClippyControls
             MinHeight = ClippyTheme.ControlHeight,
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center,
-            Child = label
+            Child = content
         };
     }
 

@@ -107,22 +107,59 @@ public static class ClipExporter
 
 public static class FfmpegLocator
 {
+    private static string? _loggedPath;
+
     public static string? Path
     {
         get
         {
             var local = System.IO.Path.Combine(AppContext.BaseDirectory, "ffmpeg.exe");
-            if (File.Exists(local)) return local;
+            if (File.Exists(local))
+            {
+                LogOnce(local, bundled: true);
+                return local;
+            }
 
             var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? "";
             foreach (var dir in pathEnv.Split(';', StringSplitOptions.RemoveEmptyEntries))
             {
                 var candidate = System.IO.Path.Combine(dir.Trim(), "ffmpeg.exe");
-                if (File.Exists(candidate)) return candidate;
+                if (File.Exists(candidate))
+                {
+                    LogOnce(candidate, bundled: false);
+                    return candidate;
+                }
             }
 
             var common = @"C:\ffmpeg\bin\ffmpeg.exe";
-            return File.Exists(common) ? common : null;
+            if (File.Exists(common))
+            {
+                LogOnce(common, bundled: false);
+                return common;
+            }
+
+            return null;
         }
+    }
+
+    public static bool IsBundled =>
+        Path != null &&
+        string.Equals(
+            Path,
+            System.IO.Path.Combine(AppContext.BaseDirectory, "ffmpeg.exe"),
+            StringComparison.OrdinalIgnoreCase);
+
+    private static void LogOnce(string path, bool bundled)
+    {
+        if (_loggedPath == path)
+        {
+            return;
+        }
+
+        _loggedPath = path;
+        ClippyDebugLog.Instance.Log("Recorder",
+            bundled
+                ? $"Using bundled FFmpeg: {path}"
+                : $"Using FFmpeg from PATH (reinstall Clippy for bundled full build): {path}");
     }
 }

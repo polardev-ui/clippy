@@ -64,12 +64,15 @@ public sealed class ClipManager
 
         Clips.Insert(0, clip);
         SaveIndex();
+        _ = ClipThumbnailService.GenerateAsync(clip.Id, destination);
         return clip;
     }
 
     public void DeleteClip(Clip clip)
     {
         if (File.Exists(clip.FilePath)) File.Delete(clip.FilePath);
+        var thumbPath = ClipThumbnailService.PathFor(clip.Id);
+        if (File.Exists(thumbPath)) File.Delete(thumbPath);
         var existing = Clips.FirstOrDefault(c => c.Id == clip.Id);
         if (existing != null) Clips.Remove(existing);
         SaveIndex();

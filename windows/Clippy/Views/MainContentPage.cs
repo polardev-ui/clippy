@@ -18,6 +18,8 @@ public sealed class MainContentPage : UserControl
     private readonly TextBlock _clipButtonLabel;
     private readonly Grid _clipButtonHost;
     private readonly TextBlock _durationBadge;
+    private readonly Border _durationPill;
+    private string? _shownErrorMessage;
     private readonly Grid _contentHost;
     private readonly Border _banner;
     private readonly TextBlock _bannerTitle;
@@ -144,7 +146,7 @@ public sealed class MainContentPage : UserControl
         _settingsTab.Tag = 1;
 
         _durationBadge = ClippyControls.Caption("Last 15s", TextAlignment.Center);
-        var durationPill = ClippyControls.CreateBadge(_durationBadge, ClippyTheme.SurfaceBrush);
+        _durationPill = ClippyControls.CreateBadge(_durationBadge, ClippyTheme.SurfaceBrush);
         var tabBar = new Grid { Padding = new Thickness(28, 0, 28, 16) };
         tabBar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         tabBar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -152,11 +154,11 @@ public sealed class MainContentPage : UserControl
         tabBar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(_libraryTab, 0);
         Grid.SetColumn(_settingsTab, 1);
-        Grid.SetColumn(durationPill, 3);
-        durationPill.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(_durationPill, 3);
+        _durationPill.VerticalAlignment = VerticalAlignment.Center;
         tabBar.Children.Add(_libraryTab);
         tabBar.Children.Add(_settingsTab);
-        tabBar.Children.Add(durationPill);
+        tabBar.Children.Add(_durationPill);
 
         _libraryPage = new LibraryPage();
         _settingsPage = new SettingsPage();
@@ -253,9 +255,15 @@ public sealed class MainContentPage : UserControl
         _banner.Visibility = coordinator.ShowClipSavedBanner ? Visibility.Visible : Visibility.Collapsed;
         _bannerTitle.Text = coordinator.LastClip?.Title ?? "";
 
-        if (!string.IsNullOrEmpty(coordinator.ErrorMessage))
+        if (!string.IsNullOrEmpty(coordinator.ErrorMessage) &&
+            coordinator.ErrorMessage != _shownErrorMessage)
         {
+            _shownErrorMessage = coordinator.ErrorMessage;
             _ = ShowErrorAsync(coordinator.ErrorMessage);
+        }
+        else if (string.IsNullOrEmpty(coordinator.ErrorMessage))
+        {
+            _shownErrorMessage = null;
         }
     }
 

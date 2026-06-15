@@ -90,30 +90,81 @@ if (-not (Test-Path $exe)) {
     throw "Clippy.exe not found in publish output: $PublishDir"
 }
 
-Write-Host "> Bundling FFmpeg"
+Write-Host "> Bundling FFmpeg (full build with WASAPI)"
 $ffmpegCache = Join-Path $BuildDir "ffmpeg-cache"
-$ffmpegZip = Join-Path $ffmpegCache "ffmpeg-win64.zip"
+$ffmpegMarker = Join-Path $ffmpegCache "full-build-verified"
 $ffmpegExtract = Join-Path $ffmpegCache "extract"
 $ffmpegDest = Join-Path $PublishDir "ffmpeg.exe"
 New-Item -ItemType Directory -Force -Path $ffmpegCache | Out-Null
 
-if (-not (Test-Path $ffmpegDest)) {
-    if (-not (Test-Path $ffmpegZip)) {
-        $ffmpegUrl = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
-        Write-Host "  Downloading FFmpeg..."
-        Invoke-WebRequest -Uri $ffmpegUrl -OutFile $ffmpegZip
-    }
+function Get-SevenZip {
+    $paths = @(
+        "${env:ProgramFiles}\7-Zip\7z.exe",
+        "${env:ProgramFiles(x86)}\7-Zip\7z.exe"
+    )
+    return $paths | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
 
+function Test-FfmpegWasapi([string]$ffmpegPath) {
+    $formats = & $ffmpegPath -hide_banner -formats 2>&1 | Out-String
+    return $formats -match '\sDE\s+wasapi\s'
+}
+
+function Install-BundledFfmpeg {
     if (Test-Path $ffmpegExtract) {
         Remove-Item $ffmpegExtract -Recurse -Force
     }
-    Expand-Archive -Path $ffmpegZip -DestinationPath $ffmpegExtract
+
+    $sevenZip = Get-SevenZip
+    $ffmpegUrl = "https://github.com/GyanD/codexffmpeg/releases/download/8.1.1/ffmpeg-8.1.1-full_build.7z"
+    $ffmpegArchive = Join-Path $ffmpegCache "ffmpeg-full.7z"
+    $ffmpegZipUrl = "https://github.com/GyanD/codexffmpeg/releases/download/8.1.1/ffmpeg-8.1.1-full_build.zip"
+    $ffmpegZip = Join-Path $ffmpegCache "ffmpeg-full.zip"
+
+    if ($sevenZip) {
+        if (-not (Test-Path $ffmpegArchive)) {
+            Write-Host "  Downloading FFmpeg full build (.7z)..."
+            Invoke-WebRequest -Uri $ffmpegUrl -OutFile $ffmpegArchive
+        }
+
+        Write-Host "  Extracting FFmpeg..."
+        & $sevenZip x $ffmpegArchive "-o$ffmpegExtract" -y | Out-Null
+    }
+    else {
+        if (-not (Test-Path $ffmpegZip)) {
+            Write-Host "  Downloading FFmpeg full build (.zip)..."
+            Invoke-WebRequest -Uri $ffmpegZipUrl -OutFile $ffmpegZip
+        }
+
+        Write-Host "  Extracting FFmpeg..."
+        Expand-Archive -Path $ffmpegZip -DestinationPath $ffmpegExtract -Force
+    }
+
     $ffmpegSource = Get-ChildItem -Path $ffmpegExtract -Filter ffmpeg.exe -Recurse | Select-Object -First 1
     if (-not $ffmpegSource) {
         throw "ffmpeg.exe not found inside downloaded archive"
     }
 
     Copy-Item $ffmpegSource.FullName $ffmpegDest -Force
+
+    if (-not (Test-FfmpegWasapi $ffmpegDest)) {
+        throw "Bundled FFmpeg does not include WASAPI input — audio capture will not work"
+    }
+
+    New-Item -ItemType File -Force -Path $ffmpegMarker | Out-Null
+}
+
+if (-not (Test-Path $ffmpegDest) -or -not (Test-Path $ffmpegMarker)) {
+    Install-BundledFfmpeg
+}
+else {
+    Write-Host "  Verifying bundled FFmpeg WASAPI support..."
+    if (-not (Test-FfmpegWasapi $ffmpegDest)) {
+        Write-Host "  Existing FFmpeg lacks WASAPI — re-downloading full build..."
+        Remove-Item $ffmpegDest -Force -ErrorAction SilentlyContinue
+        Remove-Item $ffmpegMarker -Force -ErrorAction SilentlyContinue
+        Install-BundledFfmpeg
+    }
 }
 
 Write-Host "  Bundled: $ffmpegDest ($([math]::Round((Get-Item $ffmpegDest).Length / 1MB, 1)) MB)"
