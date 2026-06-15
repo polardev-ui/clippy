@@ -10,20 +10,22 @@ public sealed class FfmpegSegmentRecorder : IDisposable
     private CancellationTokenSource? _rotationCts;
     private Task? _rotationTask;
     private readonly object _lock = new();
-    private AudioCapturePlan? _cachedPlan;
     private bool _loggedAudioUnavailable;
+    private bool _useNaudioSystemAudio = true;
 
     public event Action<RecordingSegment>? SegmentFinished;
 
     public bool IsRunning => _process is { HasExited: false };
 
-    public void Start(CaptureSettings settings, string bufferDirectory)
+    public void Start(CaptureSettings settings, string bufferDirectory, bool preserveState = false)
     {
         Stop();
-        FfmpegCapabilities.Reset();
-        DshowDeviceResolver.InvalidateCache();
-        _cachedPlan = null;
-        _loggedAudioUnavailable = false;
+
+        if (!preserveState)
+        {
+            _loggedAudioUnavailable = false;
+            _useNaudioSystemAudio = !FfmpegCapabilities.SupportsWasapi;
+        }
 
         _ = FfmpegCapabilities.SupportsWasapi;
 
@@ -62,21 +64,20 @@ public sealed class FfmpegSegmentRecorder : IDisposable
             var segmentPath = Path.Combine(bufferDirectory, $"seg_{Guid.NewGuid():N}.mp4");
             try
             {
-                var result = await RecordSegmentWithFallbackAsync(settings, segmentPath, 5, token);
+                var result = await RecordSegmentAsync(settings, segmentPath, 5, token);
                 if (result.Recorded && File.Exists(segmentPath) && new FileInfo(segmentPath).Length > 500)
                 {
                     if (result.HadMic && !result.UsedMic)
                     {
-                        ClippyDebugLog.Instance.Log("Recorder", "Recording without microphone — check mic device in Settings");
+                        ClippyDebugLog.Instance.Log("Recorder",
+                            "Recording without microphone — mic may be in use by voice recognition");
                     }
 
                     if (!result.UsedMic && !result.UsedSystemAudio && !_loggedAudioUnavailable)
                     {
                         _loggedAudioUnavailable = true;
-                        var hint = FfmpegLocator.IsBundled && FfmpegCapabilities.SupportsWasapi
-                            ? "check audio devices in Settings"
-                            : "reinstall Clippy to get the full FFmpeg build with WASAPI, then check audio devices";
-                        ClippyDebugLog.Instance.Log("Recorder", $"No audio in buffer segments — {hint}");
+                        ClippyDebugLog.Instance.Log("Recorder",
+                            "No audio in buffer segments — check speakers and mic in Settings");
                     }
 
                     SegmentFinished?.Invoke(new RecordingSegment
@@ -104,82 +105,162 @@ public sealed class FfmpegSegmentRecorder : IDisposable
         }
     }
 
-    private async Task<SegmentCaptureResult> RecordSegmentWithFallbackAsync(
+    private async Task<SegmentCaptureResult> RecordSegmentAsync(
+        CaptureSettings settings,
+        string outputPath,
+        int seconds,
+        CancellationToken token)
+    {
+        PrepareOutputFile(outputPath);
+
+        if (_useNaudioSystemAudio || !FfmpegCapabilities.SupportsWasapi)
+        {
+            return await RecordWithNaudioAsync(settings, outputPath, seconds, token);
+        }
+
+        var ffmpegResult = await TryFfmpegWasapiSegmentAsync(settings, outputPath, seconds, token);
+        if (ffmpegResult.Recorded)
+        {
+            return ffmpegResult;
+        }
+
+        _useNaudioSystemAudio = true;
+        return await RecordWithNaudioAsync(settings, outputPath, seconds, token);
+    }
+
+    private async Task<SegmentCaptureResult> RecordWithNaudioAsync(
+        CaptureSettings settings,
+        string outputPath,
+        int seconds,
+        CancellationToken token)
+    {
+        var hadMic = !string.IsNullOrEmpty(settings.MicrophoneDeviceId) ||
+                     !string.IsNullOrEmpty(settings.MicrophoneDeviceName);
+        var videoTemp = Path.Combine(Path.GetTempPath(), $"clippy_vid_{Guid.NewGuid():N}.mp4");
+
+        try
+        {
+            var videoTask = RecordVideoOnlyAsync(settings, videoTemp, seconds, token);
+            var loopTask = NaudioSegmentAudio.RecordLoopbackWavAsync(settings.OutputDeviceId, seconds, token);
+            var micTask = hadMic
+                ? NaudioSegmentAudio.RecordMicWavAsync(settings.MicrophoneDeviceId, seconds, token)
+                : Task.FromResult<string?>(null);
+
+            await Task.WhenAll(videoTask, loopTask, micTask);
+
+            if (!videoTask.Result || !File.Exists(videoTemp) || new FileInfo(videoTemp).Length < 500)
+            {
+                return new SegmentCaptureResult(false, hadMic, false, false);
+            }
+
+            var loopWav = loopTask.Result;
+            var micWav = micTask.Result;
+            var usedSystem = !string.IsNullOrEmpty(loopWav);
+            var usedMic = !string.IsNullOrEmpty(micWav);
+
+            if (usedSystem || usedMic)
+            {
+                if (await MuxSegmentAsync(videoTemp, loopWav, micWav, outputPath, seconds, token))
+                {
+                    return new SegmentCaptureResult(true, hadMic, usedMic, usedSystem);
+                }
+            }
+
+            File.Move(videoTemp, outputPath, overwrite: true);
+            return new SegmentCaptureResult(true, hadMic, false, false);
+        }
+        finally
+        {
+            try { if (File.Exists(videoTemp)) File.Delete(videoTemp); } catch { }
+        }
+    }
+
+    private async Task<SegmentCaptureResult> TryFfmpegWasapiSegmentAsync(
         CaptureSettings settings,
         string outputPath,
         int seconds,
         CancellationToken token)
     {
         var hadMic = !string.IsNullOrEmpty(settings.MicrophoneDeviceName);
-        var tried = new HashSet<AudioCapturePlan>();
-
-        while (true)
+        foreach (var systemInput in BuildWasapiSystemInputs(settings.OutputDeviceName))
         {
-            var plans = BuildAudioPlans(settings, hadMic);
-            if (_cachedPlan is { } cached)
+            PrepareOutputFile(outputPath);
+            var plan = new AudioCapturePlan(systemInput, UseMic: false);
+            var args = BuildArgs(settings, outputPath, seconds, plan);
+            var (exitCode, _) = await RunFfmpegAsync(args, token);
+            if (exitCode == 0 && File.Exists(outputPath) && new FileInfo(outputPath).Length > 500)
             {
-                plans = new[] { cached }.Concat(plans.Where(p => !p.Equals(cached))).ToList();
+                return new SegmentCaptureResult(true, hadMic, false, true);
             }
 
-            var remaining = plans.Where(p => !tried.Contains(p)).ToList();
-            if (remaining.Count == 0)
+            if (!FfmpegCapabilities.SupportsWasapi)
             {
                 break;
             }
-
-            foreach (var plan in remaining)
-            {
-                tried.Add(plan);
-                PrepareOutputFile(outputPath);
-                var args = BuildArgs(settings, outputPath, seconds, plan);
-                var (exitCode, stderr) = await RunFfmpegAsync(args, token);
-                if (exitCode == 0 && File.Exists(outputPath) && new FileInfo(outputPath).Length > 500)
-                {
-                    _cachedPlan = plan;
-                    return new SegmentCaptureResult(true, hadMic, plan.UseMic, plan.HasSystemAudio);
-                }
-
-                if (!FfmpegCapabilities.SupportsWasapi && plan.HasSystemAudio)
-                {
-                    break;
-                }
-            }
         }
 
-        _cachedPlan = null;
         return new SegmentCaptureResult(false, hadMic, false, false);
     }
 
-    private static IReadOnlyList<AudioCapturePlan> BuildAudioPlans(CaptureSettings settings, bool hadMic)
+    private async Task<bool> RecordVideoOnlyAsync(
+        CaptureSettings settings,
+        string outputPath,
+        int seconds,
+        CancellationToken token)
     {
-        var plans = new List<AudioCapturePlan>();
+        PrepareOutputFile(outputPath);
+        var args = BuildArgs(settings, outputPath, seconds, new AudioCapturePlan(null, false));
+        var (exitCode, _) = await RunFfmpegAsync(args, token);
+        return exitCode == 0 && File.Exists(outputPath) && new FileInfo(outputPath).Length > 500;
+    }
 
-        if (FfmpegCapabilities.SupportsWasapi)
+    private static async Task<bool> MuxSegmentAsync(
+        string videoPath,
+        string? loopWav,
+        string? micWav,
+        string outputPath,
+        int seconds,
+        CancellationToken token)
+    {
+        PrepareOutputFile(outputPath);
+
+        string args;
+        if (!string.IsNullOrEmpty(loopWav) && !string.IsNullOrEmpty(micWav))
         {
-            foreach (var systemInput in BuildWasapiSystemInputs(settings.OutputDeviceName))
-            {
-                if (hadMic && FfmpegCapabilities.SupportsDshow)
-                {
-                    foreach (var mic in DshowDeviceResolver.MicrophoneCandidates(settings.MicrophoneDeviceName))
-                    {
-                        plans.Add(new AudioCapturePlan(systemInput, UseMic: true, MicDeviceName: mic));
-                    }
-                }
-
-                plans.Add(new AudioCapturePlan(systemInput, UseMic: false));
-            }
+            args = $"-y -i \"{videoPath}\" -i \"{loopWav}\" -i \"{micWav}\" " +
+                   "-filter_complex \"[1:a][2:a]amix=inputs=2:duration=first:dropout_transition=0[aout]\" " +
+                   $"-map 0:v -map \"[aout]\" -c:v copy -c:a aac -b:a 192k -t {seconds} \"{outputPath}\"";
+        }
+        else if (!string.IsNullOrEmpty(loopWav))
+        {
+            args = $"-y -i \"{videoPath}\" -i \"{loopWav}\" -map 0:v -map 1:a -c:v copy -c:a aac -b:a 192k " +
+                   $"-shortest -t {seconds} \"{outputPath}\"";
+        }
+        else if (!string.IsNullOrEmpty(micWav))
+        {
+            args = $"-y -i \"{videoPath}\" -i \"{micWav}\" -map 0:v -map 1:a -c:v copy -c:a aac -b:a 192k " +
+                   $"-shortest -t {seconds} \"{outputPath}\"";
+        }
+        else
+        {
+            return false;
         }
 
-        if (hadMic && FfmpegCapabilities.SupportsDshow)
+        try
         {
-            foreach (var mic in DshowDeviceResolver.MicrophoneCandidates(settings.MicrophoneDeviceName))
-            {
-                plans.Add(new AudioCapturePlan(SystemInput: null, UseMic: true, MicDeviceName: mic));
-            }
+            await ClipExporter.RunFfmpegAsync(args);
+            return File.Exists(outputPath) && new FileInfo(outputPath).Length > 500;
         }
-
-        plans.Add(new AudioCapturePlan(SystemInput: null, UseMic: false));
-        return plans;
+        catch (Exception ex)
+        {
+            ClippyDebugLog.Instance.Log("Recorder", $"Mux failed: {ex.Message}");
+            return false;
+        }
+        finally
+        {
+            try { if (!string.IsNullOrEmpty(loopWav)) File.Delete(loopWav); } catch { }
+            try { if (!string.IsNullOrEmpty(micWav)) File.Delete(micWav); } catch { }
+        }
     }
 
     private static IReadOnlyList<string> BuildWasapiSystemInputs(string? outputDeviceName)
@@ -193,10 +274,6 @@ public sealed class FfmpegSegmentRecorder : IDisposable
         if (FfmpegCapabilities.SupportsLoopbackFlag)
         {
             yield return WasapiInput(device, useLoopbackFlag: true);
-            if (device != null)
-            {
-                yield return WasapiInput($"{device} (loopback)", useLoopbackFlag: true);
-            }
         }
 
         if (device != null)
@@ -340,10 +417,7 @@ public sealed class FfmpegSegmentRecorder : IDisposable
 
     public void Dispose() => Stop();
 
-    private readonly record struct AudioCapturePlan(string? SystemInput, bool UseMic, string? MicDeviceName = null)
-    {
-        public bool HasSystemAudio => !string.IsNullOrEmpty(SystemInput);
-    }
+    private readonly record struct AudioCapturePlan(string? SystemInput, bool UseMic, string? MicDeviceName = null);
 
     private readonly record struct SegmentCaptureResult(
         bool Recorded,
@@ -361,7 +435,9 @@ public sealed class CaptureSettings
     public int FrameRate { get; init; } = 30;
     public int VideoBitrate { get; init; } = 2_000_000;
     public string? MicrophoneDeviceName { get; init; }
+    public string? MicrophoneDeviceId { get; init; }
     public string? OutputDeviceName { get; init; }
+    public string? OutputDeviceId { get; init; }
 
     public (int Width, int Height) Dimensions => (Width, Height);
 
@@ -372,10 +448,11 @@ public sealed class CaptureSettings
             settings.CaptureResolution, display.Width, display.Height);
 
         string? micName = null;
+        string? micId = null;
         if (!string.IsNullOrEmpty(settings.PreferredMicrophoneId))
         {
-            var resolved = AudioDeviceManager.ResolvedDeviceName(
-                settings.PreferredMicrophoneId, NAudio.CoreAudioApi.DataFlow.Capture);
+            micId = settings.PreferredMicrophoneId;
+            var resolved = AudioDeviceManager.ResolvedDeviceName(micId, NAudio.CoreAudioApi.DataFlow.Capture);
             if (resolved is not "System Default" and not "Unknown Device")
             {
                 micName = DshowDeviceResolver.ResolveMicrophoneName(resolved);
@@ -383,10 +460,11 @@ public sealed class CaptureSettings
         }
 
         string? outputName = null;
+        string? outputId = null;
         if (!string.IsNullOrEmpty(settings.PreferredAudioOutputId))
         {
-            outputName = AudioDeviceManager.ResolvedDeviceName(
-                settings.PreferredAudioOutputId, NAudio.CoreAudioApi.DataFlow.Render);
+            outputId = settings.PreferredAudioOutputId;
+            outputName = AudioDeviceManager.ResolvedDeviceName(outputId, NAudio.CoreAudioApi.DataFlow.Render);
         }
 
         return new CaptureSettings
@@ -398,7 +476,9 @@ public sealed class CaptureSettings
             FrameRate = (int)settings.CaptureFrameRate,
             VideoBitrate = settings.CaptureResolution.VideoBitrate(),
             MicrophoneDeviceName = micName,
-            OutputDeviceName = outputName is "System Default" or "Unknown Device" ? null : outputName
+            MicrophoneDeviceId = micId,
+            OutputDeviceName = outputName is "System Default" or "Unknown Device" ? null : outputName,
+            OutputDeviceId = outputId
         };
     }
 }

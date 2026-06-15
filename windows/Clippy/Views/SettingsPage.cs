@@ -326,10 +326,13 @@ public sealed class SettingsPage : UserControl
             Children =
             {
                 new TextBlock { Text = "Listen for \"Clippy, do your thing\" and \"Clippy, clip that\"" },
-                ClippyControls.Caption("Requires Windows Settings → Privacy → Speech → Online speech recognition"),
+                ClippyControls.Caption(
+                    "Requires Windows speech recognition (dictation). " +
+                    "Enable it in Settings → Privacy & security → Speech, or Time & language → Speech. " +
+                    "It is off by default on many PCs."),
                 toggle,
                 ClippyControls.CreateSecondaryButton("Open Speech Settings", (_, _) =>
-                    VoiceCommandListener.OpenSpeechPrivacySettings()),
+                    VoiceCommandListener.OpenSpeechLanguageSettings()),
                 _voiceStatus,
                 _voiceHeard
             }

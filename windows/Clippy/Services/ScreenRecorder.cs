@@ -158,7 +158,7 @@ public sealed class ScreenRecorder
                 if (display != null)
                 {
                     var capture = CaptureSettings.FromAppSettings(display);
-                    _recorder?.Start(capture, ClipStorage.BufferDirectory);
+                    _recorder?.Start(capture, ClipStorage.BufferDirectory, preserveState: true);
                 }
             }
 

@@ -112,6 +112,11 @@ function Get-FfmpegOutput([string]$ffmpegPath, [string[]]$arguments) {
 }
 
 function Test-FfmpegWasapi([string]$ffmpegPath) {
+    $listDevicesExit = & $ffmpegPath -hide_banner -f wasapi -list_devices true -i dummy 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        return $true
+    }
+
     foreach ($flag in @('-devices', '-formats')) {
         $output = Get-FfmpegOutput $ffmpegPath @('-hide_banner', $flag)
         if ($output -match 'wasapi') {

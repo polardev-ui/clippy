@@ -336,6 +336,11 @@ public sealed class OnboardingPage : UserControl
             });
 
         _contentHost.Children.Add(heard);
+        _contentHost.Children.Add(ClippyControls.Caption(
+            "If nothing happens, enable Windows speech recognition (dictation) in Settings — it is off by default.",
+            TextAlignment.Center));
+        _contentHost.Children.Add(ClippyControls.CreateSecondaryButton("Open Speech Settings", (_, _) =>
+            VoiceCommandListener.OpenSpeechLanguageSettings()));
         AppCoordinator.Instance.BeginOnboardingVoicePractice();
     }
 }

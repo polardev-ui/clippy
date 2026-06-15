@@ -48,6 +48,21 @@ public sealed class VoiceCommandListener
         }
     }
 
+    public static void OpenSpeechLanguageSettings()
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("ms-settings:speech")
+            {
+                UseShellExecute = true
+            });
+        }
+        catch
+        {
+            OpenSpeechPrivacySettings();
+        }
+    }
+
     public void RefreshMicrophone()
     {
         var settings = AppSettings.Instance;
@@ -70,7 +85,7 @@ public sealed class VoiceCommandListener
 
         if (_speechBlocked)
         {
-            StatusMessage = "Speech recognition blocked — enable in Windows Settings → Privacy → Speech";
+            StatusMessage = "Speech recognition blocked — turn on Windows speech / dictation in Settings";
             NotifyStateChanged();
             return;
         }
@@ -122,7 +137,7 @@ public sealed class VoiceCommandListener
             if (IsSpeechPolicyError(ex))
             {
                 _speechBlocked = true;
-                StatusMessage = "Turn on online speech recognition in Settings → Privacy → Speech";
+                StatusMessage = "Turn on Windows speech recognition and dictation in Settings";
                 ClippyDebugLog.Instance.LogError("Voice", ex, "prepareAndStart (policy)");
                 NotifyStateChanged();
                 return;
