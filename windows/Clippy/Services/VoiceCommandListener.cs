@@ -1,7 +1,6 @@
 using Clippy.Models;
 using Windows.Media.Capture;
 using Windows.Media.SpeechRecognition;
-using Windows.Security.Authorization.AppCapability;
 
 namespace Clippy.Services;
 
@@ -235,22 +234,6 @@ public sealed class VoiceCommandListener
     {
         try
         {
-            var capability = AppCapability.Create("Microphone");
-            var access = capability.CheckAccess();
-            if (access == AppCapabilityAccessStatus.Allowed)
-            {
-                return true;
-            }
-
-            if (access == AppCapabilityAccessStatus.UserPromptRequired)
-            {
-                access = await capability.RequestAccessAsync();
-                if (access == AppCapabilityAccessStatus.Allowed)
-                {
-                    return true;
-                }
-            }
-
             var settings = new MediaCaptureInitializationSettings
             {
                 StreamingCaptureMode = StreamingCaptureMode.Audio
