@@ -34,7 +34,7 @@ public sealed class ScreenRecorder
 
     public void RequestScreenCaptureAccess()
     {
-        StatusMessage = "Allow screen capture for Clippy in Windows Settings if prompted.";
+        StatusMessage = "Starting screen capture…";
         NotifyStateChanged();
     }
 

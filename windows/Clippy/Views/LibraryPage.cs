@@ -18,8 +18,16 @@ public sealed class LibraryPage : UserControl
 
     public LibraryPage()
     {
+        HorizontalAlignment = HorizontalAlignment.Stretch;
+        VerticalAlignment = VerticalAlignment.Stretch;
+        Background = ClippyTheme.BackgroundBrush;
+
         _grid = new ItemsControl { HorizontalAlignment = HorizontalAlignment.Stretch };
-        _host = new Grid();
+        _host = new Grid
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch
+        };
         Content = _host;
         ClipManager.Instance.Clips.CollectionChanged += (_, _) => DispatcherQueue.TryEnqueue(Refresh);
         Refresh();

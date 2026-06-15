@@ -12,10 +12,13 @@ public sealed class VoiceCommandListener
     private SpeechRecognizer? _recognizer;
     private bool _isListening;
     private bool _hasTriggeredThisUtterance;
+    private bool _speechBlocked;
     private string _lastLoggedPhrase = "";
+    private DateTime _lastRetryUtc = DateTime.MinValue;
 
     public bool IsListening => _isListening;
     public bool OnboardingMode { get; set; }
+    public bool SpeechBlocked => _speechBlocked;
     public string StatusMessage { get; private set; } = "Voice idle";
     public string? LastHeardPhrase { get; private set; }
     public string? LastVoiceError { get; private set; }
@@ -28,6 +31,20 @@ public sealed class VoiceCommandListener
 
     private VoiceCommandListener()
     {
+    }
+
+    public static void OpenSpeechPrivacySettings()
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("ms-settings:privacy-speech")
+            {
+                UseShellExecute = true
+            });
+        }
+        catch
+        {
+        }
     }
 
     public void RefreshMicrophone()
@@ -50,11 +67,29 @@ public sealed class VoiceCommandListener
             return;
         }
 
+        if (_speechBlocked)
+        {
+            StatusMessage = "Speech recognition blocked — enable in Windows Settings → Privacy → Speech";
+            NotifyStateChanged();
+            return;
+        }
+
         try
         {
             await StopListeningAsync();
 
             _recognizer = new SpeechRecognizer();
+            var permission = await SpeechRecognizer.RequestPermissionsAsync();
+            if (permission != SpeechRecognizerPermissionStatus.Allowed)
+            {
+                _speechBlocked = true;
+                LastVoiceError = "Microphone or speech permission was denied.";
+                StatusMessage = "Allow microphone and speech in Windows Settings → Privacy → Speech";
+                ClippyDebugLog.Instance.Log("Voice", $"Permission denied: {permission}");
+                NotifyStateChanged();
+                return;
+            }
+
             var grammar = new SpeechRecognitionListConstraint(new[]
             {
                 "Clippy",
@@ -63,7 +98,12 @@ public sealed class VoiceCommandListener
                 "clip it",
                 "do your thing"
             });
-            await _recognizer.CompileConstraintsAsync();
+            _recognizer.Constraints.Add(grammar);
+            var compileResult = await _recognizer.CompileConstraintsAsync();
+            if (compileResult.Status != SpeechRecognitionResultStatus.Success)
+            {
+                throw new InvalidOperationException($"Could not compile voice grammar: {compileResult.Status}");
+            }
 
             _session = _recognizer.ContinuousRecognitionSession;
             _session.ResultGenerated += OnResultGenerated;
@@ -71,17 +111,36 @@ public sealed class VoiceCommandListener
 
             await _session.StartAsync();
             _isListening = true;
+            _speechBlocked = false;
             StatusMessage = "Listening for \"Clippy, clip that\"…";
             ClippyDebugLog.Instance.Log("Voice", "Starting recognition task");
         }
         catch (Exception ex)
         {
             LastVoiceError = ex.Message;
+            if (IsSpeechPolicyError(ex))
+            {
+                _speechBlocked = true;
+                StatusMessage = "Turn on online speech recognition in Settings → Privacy → Speech";
+                ClippyDebugLog.Instance.LogError("Voice", ex, "prepareAndStart (policy)");
+                NotifyStateChanged();
+                return;
+            }
+
             StatusMessage = "Voice error — retrying…";
             ClippyDebugLog.Instance.LogError("Voice", ex, "prepareAndStart");
+
+            var now = DateTime.UtcNow;
+            if ((now - _lastRetryUtc).TotalSeconds < 30)
+            {
+                NotifyStateChanged();
+                return;
+            }
+
+            _lastRetryUtc = now;
             _ = Task.Run(async () =>
             {
-                await Task.Delay(3000);
+                await Task.Delay(5000);
                 await PrepareAndStartAsync();
             });
         }
@@ -102,16 +161,28 @@ public sealed class VoiceCommandListener
 
         _recognizer?.Dispose();
         _recognizer = null;
-        StatusMessage = "Voice idle";
+        if (!_speechBlocked)
+        {
+            StatusMessage = "Voice idle";
+        }
+
         NotifyStateChanged();
+    }
+
+    public void ResetSpeechBlock()
+    {
+        _speechBlocked = false;
+        _lastRetryUtc = DateTime.MinValue;
     }
 
     private void OnCompleted(SpeechContinuousRecognitionSession sender, SpeechContinuousRecognitionCompletedEventArgs args)
     {
-        if (AppSettings.Instance.VoiceCommandsEnabled)
+        if (_speechBlocked || !AppSettings.Instance.VoiceCommandsEnabled)
         {
-            _ = PrepareAndStartAsync();
+            return;
         }
+
+        _ = PrepareAndStartAsync();
     }
 
     private void OnResultGenerated(
@@ -156,6 +227,13 @@ public sealed class VoiceCommandListener
         }
 
         NotifyStateChanged();
+    }
+
+    private static bool IsSpeechPolicyError(Exception ex)
+    {
+        var message = ex.Message + " " + ex.HResult;
+        return message.Contains("speech privacy policy", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("0x80045509", StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool MatchesTrigger(string text)

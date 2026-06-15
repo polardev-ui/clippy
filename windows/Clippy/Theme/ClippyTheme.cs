@@ -29,7 +29,8 @@ public static class ClippyTheme
 
     public static Thickness PagePadding => new(28);
     public static CornerRadius CardRadius => new(16);
-    public static CornerRadius PillRadius => new(999);
+    public static CornerRadius ButtonRadius => new(10);
+    public static double ControlHeight => 36;
 
     public static void ApplyDarkWindow(Window window)
     {

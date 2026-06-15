@@ -20,7 +20,15 @@ public sealed class SettingsPage : UserControl
 
     public SettingsPage()
     {
-        var scroll = new ScrollViewer();
+        HorizontalAlignment = HorizontalAlignment.Stretch;
+        VerticalAlignment = VerticalAlignment.Stretch;
+        Background = ClippyTheme.BackgroundBrush;
+
+        var scroll = new ScrollViewer
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch
+        };
         var root = new StackPanel { Spacing = 18, Padding = new Thickness(28) };
 
         root.Children.Add(ClippyControls.CreateSection("Clip Length", CreateClipDurationPicker(), "\uE823"));
@@ -318,7 +326,10 @@ public sealed class SettingsPage : UserControl
             Children =
             {
                 new TextBlock { Text = "Listen for \"Clippy, do your thing\" and \"Clippy, clip that\"" },
+                ClippyControls.Caption("Requires Windows Settings → Privacy → Speech → Online speech recognition"),
                 toggle,
+                ClippyControls.CreateSecondaryButton("Open Speech Settings", (_, _) =>
+                    VoiceCommandListener.OpenSpeechPrivacySettings()),
                 _voiceStatus,
                 _voiceHeard
             }

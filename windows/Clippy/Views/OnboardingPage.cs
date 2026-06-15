@@ -24,10 +24,15 @@ public sealed class OnboardingPage : UserControl
 
     public OnboardingPage()
     {
-        MinWidth = 900;
-        MinHeight = 620;
+        HorizontalAlignment = HorizontalAlignment.Stretch;
+        VerticalAlignment = VerticalAlignment.Stretch;
 
-        var root = new Grid { Background = ClippyTheme.BackgroundBrush };
+        var root = new Grid
+        {
+            Background = ClippyTheme.BackgroundBrush,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch
+        };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });

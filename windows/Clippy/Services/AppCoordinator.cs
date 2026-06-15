@@ -105,6 +105,7 @@ public sealed class AppCoordinator
 
     public void RefreshVoiceListening()
     {
+        VoiceCommandListener.Instance.ResetSpeechBlock();
         if (AppSettings.Instance.VoiceCommandsEnabled)
         {
             _ = Task.Run(async () =>

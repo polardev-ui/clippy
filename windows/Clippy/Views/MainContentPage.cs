@@ -31,10 +31,15 @@ public sealed class MainContentPage : UserControl
 
     public MainContentPage()
     {
-        MinWidth = 900;
-        MinHeight = 620;
+        HorizontalAlignment = HorizontalAlignment.Stretch;
+        VerticalAlignment = VerticalAlignment.Stretch;
 
-        var root = new Grid { Background = ClippyTheme.BackgroundBrush };
+        var root = new Grid
+        {
+            Background = ClippyTheme.BackgroundBrush,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch
+        };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -62,32 +67,45 @@ public sealed class MainContentPage : UserControl
         {
             FontFamily = new FontFamily("Consolas"),
             FontSize = 12,
-            Foreground = ClippyTheme.TextPrimaryBrush
+            Foreground = ClippyTheme.TextPrimaryBrush,
+            VerticalAlignment = VerticalAlignment.Center
         };
         _bufferPillText = new TextBlock
         {
             FontSize = 12,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Foreground = ClippyTheme.TextPrimaryBrush
+            Foreground = ClippyTheme.TextPrimaryBrush,
+            VerticalAlignment = VerticalAlignment.Center
         };
-        _statusDot = new Ellipse { Width = 8, Height = 8, Fill = ClippyTheme.AccentBrush };
+        _statusDot = new Ellipse
+        {
+            Width = 8,
+            Height = 8,
+            Fill = ClippyTheme.AccentBrush,
+            VerticalAlignment = VerticalAlignment.Center
+        };
 
-        _voiceIndicator = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Visibility = Visibility.Collapsed };
-        _voiceIndicator.Children.Add(new FontIcon { Glyph = "\uE9D9", Foreground = ClippyTheme.AccentBrush, FontSize = 12 });
-
-        var statusPill = ClippyControls.CreatePill(new StackPanel
+        _voiceIndicator = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            Children =
+            Spacing = 4,
+            Visibility = Visibility.Collapsed,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        _voiceIndicator.Children.Add(new FontIcon { Glyph = "\uE9D9", Foreground = ClippyTheme.AccentBrush, FontSize = 12 });
+
+        var statusPill = ClippyControls.CreatePill(ClippyControls.CreateStatusRow(
+            _statusDot,
+            _bufferPillText,
+            new Border
             {
-                _statusDot,
-                _bufferPillText,
-                new Border { Width = 1, Height = 14, Background = ClippyTheme.BorderBrush },
-                _hotkeyText,
-                _voiceIndicator
-            }
-        });
+                Width = 1,
+                Height = 14,
+                Background = ClippyTheme.BorderBrush,
+                VerticalAlignment = VerticalAlignment.Center
+            },
+            _hotkeyText,
+            _voiceIndicator));
 
         _clipButtonHost = ClippyControls.CreatePrimaryButton("Buffering…", async (_, _) =>
             await AppCoordinator.Instance.TriggerClipAsync(AppCoordinator.ClipSource.Button), out _clipButtonLabel);
@@ -110,6 +128,10 @@ public sealed class MainContentPage : UserControl
         Grid.SetColumn(titleStack, 1);
         Grid.SetColumn(statusPill, 3);
         Grid.SetColumn(_clipButtonHost, 4);
+        statusPill.HorizontalAlignment = HorizontalAlignment.Right;
+        statusPill.VerticalAlignment = VerticalAlignment.Center;
+        _clipButtonHost.HorizontalAlignment = HorizontalAlignment.Right;
+        _clipButtonHost.VerticalAlignment = VerticalAlignment.Center;
         header.Children.Add(logo);
         header.Children.Add(titleStack);
         header.Children.Add(statusPill);
@@ -137,7 +159,12 @@ public sealed class MainContentPage : UserControl
 
         _libraryPage = new LibraryPage();
         _settingsPage = new SettingsPage();
-        _contentHost = new Grid { Children = { _libraryPage } };
+        _contentHost = new Grid
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            Children = { _libraryPage }
+        };
 
         _bannerTitle = ClippyControls.Caption("");
         _banner = new Border

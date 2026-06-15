@@ -125,10 +125,35 @@ public static class ClippyControls
             Background = background ?? ClippyTheme.SurfaceElevatedBrush,
             BorderBrush = ClippyTheme.BorderBrush,
             BorderThickness = new Thickness(1),
-            CornerRadius = ClippyTheme.PillRadius,
-            Padding = new Thickness(14, 8, 14, 8),
+            CornerRadius = ClippyTheme.ButtonRadius,
+            Padding = new Thickness(14, 0, 14, 0),
+            MinHeight = ClippyTheme.ControlHeight,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center,
             Child = child
         };
+
+    public static StackPanel CreateStatusRow(params UIElement[] items)
+    {
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        foreach (var item in items)
+        {
+            if (item is FrameworkElement fe)
+            {
+                fe.VerticalAlignment = VerticalAlignment.Center;
+            }
+
+            row.Children.Add(item);
+        }
+
+        return row;
+    }
 
     public static Border CreateSection(string title, UIElement content, string? iconGlyph = null)
     {
@@ -182,29 +207,37 @@ public static class ClippyControls
         var face = new Border
         {
             Background = ClippyTheme.AccentBrush,
-            CornerRadius = ClippyTheme.PillRadius,
-            Padding = new Thickness(18, 10, 18, 10),
+            CornerRadius = ClippyTheme.ButtonRadius,
+            MinHeight = ClippyTheme.ControlHeight,
+            Padding = new Thickness(16, 0, 16, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
             Child = labelBlock
         };
 
         var glow = new Border
         {
             Background = ClippyTheme.AccentGlowBrush,
-            CornerRadius = ClippyTheme.PillRadius,
-            Margin = new Thickness(-3),
+            CornerRadius = ClippyTheme.ButtonRadius,
+            Margin = new Thickness(-2),
             Opacity = 0
         };
 
-        var host = new Grid { Children = { glow, face } };
+        var host = new Grid { HorizontalAlignment = HorizontalAlignment.Left, Children = { glow, face } };
         var button = new Button
         {
             Style = PlainButtonStyle,
             Content = host,
-            HorizontalAlignment = HorizontalAlignment.Right
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center
         };
         button.Click += click;
 
-        var wrapper = new Grid { Children = { button } };
+        var wrapper = new Grid
+        {
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { button }
+        };
         wrapper.Tag = glow;
         return wrapper;
     }
@@ -247,8 +280,11 @@ public static class ClippyControls
             Background = selected ? ClippyTheme.AccentBrush : ClippyTheme.SurfaceBrush,
             BorderBrush = selected ? ClippyTheme.AccentBrush : ClippyTheme.BorderBrush,
             BorderThickness = new Thickness(1),
-            CornerRadius = ClippyTheme.PillRadius,
-            Padding = new Thickness(18, 10, 18, 10),
+            CornerRadius = ClippyTheme.ButtonRadius,
+            MinHeight = ClippyTheme.ControlHeight,
+            Padding = new Thickness(16, 0, 16, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center,
             Child = text
         };
         tab.Tapped += onTap;
@@ -277,8 +313,9 @@ public static class ClippyControls
                 Background = ClippyTheme.SurfaceElevatedBrush,
                 BorderBrush = ClippyTheme.BorderBrush,
                 BorderThickness = new Thickness(1),
-                CornerRadius = ClippyTheme.PillRadius,
-                Padding = new Thickness(20, 10, 20, 10),
+                CornerRadius = ClippyTheme.ButtonRadius,
+                MinHeight = ClippyTheme.ControlHeight,
+                Padding = new Thickness(16, 0, 16, 0),
                 Child = new TextBlock
                 {
                     Text = label,
@@ -304,8 +341,9 @@ public static class ClippyControls
             Content = new Border
             {
                 Background = ClippyTheme.AccentBrush,
-                CornerRadius = ClippyTheme.PillRadius,
-                Padding = new Thickness(24, 12, 24, 12),
+                CornerRadius = ClippyTheme.ButtonRadius,
+                MinHeight = ClippyTheme.ControlHeight,
+                Padding = new Thickness(20, 0, 20, 0),
                 Child = new TextBlock
                 {
                     Text = label,

@@ -4,7 +4,6 @@ using Clippy.Views;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Media;
 using Windows.Graphics;
 using WinRT.Interop;
 
@@ -22,7 +21,6 @@ public sealed partial class MainWindow : Window
         _wndProcDelegate = WndProc;
 
         Title = "Clippy";
-        SystemBackdrop = new MicaBackdrop();
 
         var hwnd = WindowNative.GetWindowHandle(this);
         var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
