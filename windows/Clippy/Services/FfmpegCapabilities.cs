@@ -89,8 +89,16 @@ public static class FfmpegCapabilities
             .FirstOrDefault() ?? "unknown";
 
         var formats = RunQuiet(ffmpeg, "-hide_banner -formats");
-        _supportsWasapi = Regex.IsMatch(formats, @"\bwasapi\b", RegexOptions.IgnoreCase);
-        _supportsDshow = Regex.IsMatch(formats, @"\bdshow\b", RegexOptions.IgnoreCase);
+        var devices = RunQuiet(ffmpeg, "-hide_banner -devices");
+        var wasapiHelp = RunQuiet(ffmpeg, "-hide_banner -h demuxer=wasapi");
+
+        _supportsWasapi = Regex.IsMatch(formats, @"\bwasapi\b", RegexOptions.IgnoreCase) ||
+                          Regex.IsMatch(devices, @"\bwasapi\b", RegexOptions.IgnoreCase) ||
+                          (wasapiHelp.Contains("wasapi", StringComparison.OrdinalIgnoreCase) &&
+                           !wasapiHelp.Contains("Unknown demuxer", StringComparison.OrdinalIgnoreCase));
+
+        _supportsDshow = Regex.IsMatch(formats, @"\bdshow\b", RegexOptions.IgnoreCase) ||
+                         Regex.IsMatch(devices, @"\bdshow\b", RegexOptions.IgnoreCase);
 
         if (_supportsWasapi)
         {

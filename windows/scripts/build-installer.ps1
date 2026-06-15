@@ -105,10 +105,22 @@ function Get-SevenZip {
     return $paths | Where-Object { Test-Path $_ } | Select-Object -First 1
 }
 
+function Get-FfmpegOutput([string]$ffmpegPath, [string[]]$arguments) {
+    return @(& $ffmpegPath @arguments 2>&1 | ForEach-Object {
+        if ($_ -is [System.Management.Automation.ErrorRecord]) { $_.ToString() } else { "$_" }
+    }) -join "`n"
+}
+
 function Test-FfmpegWasapi([string]$ffmpegPath) {
-    $formats = & $ffmpegPath -hide_banner -formats 2>&1 | Out-String
-    # WASAPI is input-only, listed as " D  wasapi" (not " DE wasapi")
-    return $formats -match '\bwasapi\b'
+    foreach ($flag in @('-devices', '-formats')) {
+        $output = Get-FfmpegOutput $ffmpegPath @('-hide_banner', $flag)
+        if ($output -match 'wasapi') {
+            return $true
+        }
+    }
+
+    $help = Get-FfmpegOutput $ffmpegPath @('-hide_banner', '-h', 'demuxer=wasapi')
+    return ($help -match 'wasapi' -and $help -notmatch 'Unknown demuxer')
 }
 
 function Install-BundledFfmpeg {
@@ -157,9 +169,15 @@ function Install-BundledFfmpeg {
     Copy-Item $ffmpegSource.FullName $ffmpegDest -Force
 
     if (-not (Test-FfmpegWasapi $ffmpegDest)) {
-        $sample = (& $ffmpegDest -hide_banner -formats 2>&1 | Out-String) -split "`n" | Select-Object -First 15
-        Write-Host "  FFmpeg -formats sample:"
-        $sample | ForEach-Object { Write-Host "    $_" }
+        $devices = Get-FfmpegOutput $ffmpegDest @('-hide_banner', '-devices')
+        $deviceSample = ($devices -split "`n" | Select-String -Pattern 'wasapi|dshow|audio' | Select-Object -First 10)
+        Write-Host "  FFmpeg device probe:"
+        if ($deviceSample) {
+            $deviceSample | ForEach-Object { Write-Host "    $_" }
+        }
+        else {
+            ($devices -split "`n" | Select-Object -First 15) | ForEach-Object { Write-Host "    $_" }
+        }
         throw "Bundled FFmpeg does not include WASAPI input — audio capture will not work"
     }
 
