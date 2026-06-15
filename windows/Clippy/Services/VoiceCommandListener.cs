@@ -1,5 +1,7 @@
 using Clippy.Models;
+using Windows.Media.Capture;
 using Windows.Media.SpeechRecognition;
+using Windows.Security.Authorization.AppCapability;
 
 namespace Clippy.Services;
 
@@ -78,17 +80,17 @@ public sealed class VoiceCommandListener
         {
             await StopListeningAsync();
 
-            _recognizer = new SpeechRecognizer();
-            var permission = await SpeechRecognizer.RequestPermissionsAsync();
-            if (permission != SpeechRecognizerPermissionStatus.Allowed)
+            if (!await EnsureMicrophoneAccessAsync())
             {
                 _speechBlocked = true;
-                LastVoiceError = "Microphone or speech permission was denied.";
-                StatusMessage = "Allow microphone and speech in Windows Settings → Privacy → Speech";
-                ClippyDebugLog.Instance.Log("Voice", $"Permission denied: {permission}");
+                LastVoiceError = "Microphone access was denied.";
+                StatusMessage = "Allow microphone access in Windows Settings → Privacy → Microphone";
+                ClippyDebugLog.Instance.Log("Voice", "Microphone access denied");
                 NotifyStateChanged();
                 return;
             }
+
+            _recognizer = new SpeechRecognizer();
 
             var grammar = new SpeechRecognitionListConstraint(new[]
             {
@@ -227,6 +229,45 @@ public sealed class VoiceCommandListener
         }
 
         NotifyStateChanged();
+    }
+
+    private static async Task<bool> EnsureMicrophoneAccessAsync()
+    {
+        try
+        {
+            var capability = AppCapability.Create("Microphone");
+            var access = capability.CheckAccess();
+            if (access == AppCapabilityAccessStatus.Allowed)
+            {
+                return true;
+            }
+
+            if (access == AppCapabilityAccessStatus.UserPromptRequired)
+            {
+                access = await capability.RequestAccessAsync();
+                if (access == AppCapabilityAccessStatus.Allowed)
+                {
+                    return true;
+                }
+            }
+
+            var settings = new MediaCaptureInitializationSettings
+            {
+                StreamingCaptureMode = StreamingCaptureMode.Audio
+            };
+            var capture = new MediaCapture();
+            await capture.InitializeAsync(settings);
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            ClippyDebugLog.Instance.Log("Voice", $"Microphone check failed: {ex.Message}");
+            return false;
+        }
     }
 
     private static bool IsSpeechPolicyError(Exception ex)
