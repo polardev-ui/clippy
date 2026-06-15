@@ -107,7 +107,8 @@ function Get-SevenZip {
 
 function Test-FfmpegWasapi([string]$ffmpegPath) {
     $formats = & $ffmpegPath -hide_banner -formats 2>&1 | Out-String
-    return $formats -match '\sDE\s+wasapi\s'
+    # WASAPI is input-only, listed as " D  wasapi" (not " DE wasapi")
+    return $formats -match '\bwasapi\b'
 }
 
 function Install-BundledFfmpeg {
@@ -128,7 +129,10 @@ function Install-BundledFfmpeg {
         }
 
         Write-Host "  Extracting FFmpeg..."
-        & $sevenZip x $ffmpegArchive "-o$ffmpegExtract" -y | Out-Null
+        & $sevenZip x $ffmpegArchive "-o$ffmpegExtract" -y
+        if ($LASTEXITCODE -ne 0) {
+            throw "7-Zip extraction failed with exit code $LASTEXITCODE"
+        }
     }
     else {
         if (-not (Test-Path $ffmpegZip)) {
@@ -140,14 +144,22 @@ function Install-BundledFfmpeg {
         Expand-Archive -Path $ffmpegZip -DestinationPath $ffmpegExtract -Force
     }
 
-    $ffmpegSource = Get-ChildItem -Path $ffmpegExtract -Filter ffmpeg.exe -Recurse | Select-Object -First 1
+    $ffmpegSource = Get-ChildItem -Path (Join-Path $ffmpegExtract "bin") -Filter ffmpeg.exe -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if (-not $ffmpegSource) {
+        $ffmpegSource = Get-ChildItem -Path $ffmpegExtract -Filter ffmpeg.exe -Recurse | Select-Object -First 1
+    }
     if (-not $ffmpegSource) {
         throw "ffmpeg.exe not found inside downloaded archive"
     }
 
+    Write-Host "  Source: $($ffmpegSource.FullName) ($([math]::Round($ffmpegSource.Length / 1MB, 1)) MB)"
     Copy-Item $ffmpegSource.FullName $ffmpegDest -Force
 
     if (-not (Test-FfmpegWasapi $ffmpegDest)) {
+        $sample = (& $ffmpegDest -hide_banner -formats 2>&1 | Out-String) -split "`n" | Select-Object -First 15
+        Write-Host "  FFmpeg -formats sample:"
+        $sample | ForEach-Object { Write-Host "    $_" }
         throw "Bundled FFmpeg does not include WASAPI input — audio capture will not work"
     }
 
