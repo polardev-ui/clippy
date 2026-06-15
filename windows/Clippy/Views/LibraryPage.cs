@@ -174,8 +174,10 @@ public sealed class LibraryPage : UserControl
                 return;
             }
 
+            var file = await StorageFile.GetFileFromPathAsync(thumbPath);
+            using var stream = await file.OpenReadAsync();
             var bitmap = new BitmapImage();
-            await bitmap.SetSourceAsync(await FileIO.OpenReadAsync(await StorageFile.GetFileFromPathAsync(thumbPath)));
+            await bitmap.SetSourceAsync(stream);
             target.Source = bitmap;
             placeholder.Visibility = Visibility.Collapsed;
         }
