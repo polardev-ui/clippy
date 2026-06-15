@@ -42,7 +42,7 @@ public static class ClippyControls
         };
     }
 
-    public static UIElement CreateLogoBadge(int size, bool glow = false)
+    public static FrameworkElement CreateLogoBadge(int size, bool glow = false)
     {
         var logoPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "clippy-logo.png");
         var image = new Image

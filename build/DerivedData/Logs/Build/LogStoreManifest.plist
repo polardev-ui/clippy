@@ -6,7 +6,7 @@
 	<integer>12</integer>
 	<key>logs</key>
 	<dict>
-		<key>5B40398C-7F76-43DE-BE84-F468342F2499</key>
+		<key>6C322939-C871-4E73-8B69-865A2038EF7C</key>
 		<dict>
 			<key>className</key>
 			<string>IDECommandLineBuildLog</string>
@@ -15,21 +15,21 @@
 			<key>domainType</key>
 			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
 			<key>fileName</key>
-			<string>5B40398C-7F76-43DE-BE84-F468342F2499.xcactivitylog</string>
+			<string>6C322939-C871-4E73-8B69-865A2038EF7C.xcactivitylog</string>
 			<key>hasPrimaryLog</key>
 			<true/>
 			<key>primaryObservable</key>
 			<dict>
 				<key>highLevelStatus</key>
-				<string>E</string>
+				<string>W</string>
 				<key>totalNumberOfAnalyzerIssues</key>
 				<integer>0</integer>
 				<key>totalNumberOfErrors</key>
-				<integer>1</integer>
+				<integer>0</integer>
 				<key>totalNumberOfTestFailures</key>
 				<integer>0</integer>
 				<key>totalNumberOfWarnings</key>
-				<integer>25</integer>
+				<integer>27</integer>
 			</dict>
 			<key>schemeIdentifier-containerName</key>
 			<string>Clippy project</string>
@@ -40,13 +40,13 @@
 			<key>signature</key>
 			<string>Building project Clippy with scheme Clippy and configuration Release</string>
 			<key>timeStartedRecording</key>
-			<real>802942366.78043103</real>
+			<real>803163391.84554803</real>
 			<key>timeStoppedRecording</key>
-			<real>802942369.24491</real>
+			<real>803163402.78885996</real>
 			<key>title</key>
 			<string>Building project Clippy with scheme Clippy and configuration Release</string>
 			<key>uniqueIdentifier</key>
-			<string>5B40398C-7F76-43DE-BE84-F468342F2499</string>
+			<string>6C322939-C871-4E73-8B69-865A2038EF7C</string>
 		</dict>
 		<key>B303EADF-BF55-46F4-9BEA-3A53DB07B911</key>
 		<dict>

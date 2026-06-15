@@ -1,0 +1,146 @@
+{
+  "" : {
+    "const-values" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/Clippy-primary.swiftconstvalues",
+    "dependencies" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/Clippy-primary.d",
+    "diagnostics" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/Clippy-primary.dia",
+    "emit-module-dependencies" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/Clippy-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/Clippy-primary-emit-module.dia",
+    "pch" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/Clippy-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/Clippy-primary.swiftdeps"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/ClippyApp.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ClippyApp.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ClippyApp.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ClippyApp.o"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/Models/AppSettings.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/AppSettings.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/AppSettings.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/AppSettings.o"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/Models/CaptureSettings.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/CaptureSettings.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/CaptureSettings.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/CaptureSettings.o"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/Models/Clip.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/Clip.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/Clip.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/Clip.o"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/Services/AppCoordinator.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/AppCoordinator.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/AppCoordinator.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/AppCoordinator.o"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/Services/AudioDeviceManager.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/AudioDeviceManager.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/AudioDeviceManager.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/AudioDeviceManager.o"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/Services/ClipExporter.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ClipExporter.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ClipExporter.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ClipExporter.o"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/Services/ClipManager.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ClipManager.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ClipManager.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ClipManager.o"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/Services/ClippyDebugLog.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ClippyDebugLog.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ClippyDebugLog.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ClippyDebugLog.o"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/Services/DisplayManager.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/DisplayManager.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/DisplayManager.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/DisplayManager.o"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/Services/HotkeyManager.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/HotkeyManager.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/HotkeyManager.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/HotkeyManager.o"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/Services/RecorderDiagnostics.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/RecorderDiagnostics.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/RecorderDiagnostics.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/RecorderDiagnostics.o"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/Services/ScreenRecorder.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ScreenRecorder.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ScreenRecorder.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ScreenRecorder.o"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/Services/SegmentAudioConverter.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/SegmentAudioConverter.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/SegmentAudioConverter.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/SegmentAudioConverter.o"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/Services/SoundPlayer.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/SoundPlayer.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/SoundPlayer.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/SoundPlayer.o"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/Services/VoiceCaptureSession.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/VoiceCaptureSession.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/VoiceCaptureSession.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/VoiceCaptureSession.o"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/Services/VoiceCommandListener.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/VoiceCommandListener.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/VoiceCommandListener.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/VoiceCommandListener.o"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/Views/ClipDetailView.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ClipDetailView.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ClipDetailView.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ClipDetailView.o"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/Views/Components/ClipCard.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ClipCard.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ClipCard.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ClipCard.o"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/Views/Components/ClipPlayerView.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ClipPlayerView.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ClipPlayerView.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ClipPlayerView.o"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/Views/Components/KeyRecorderView.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/KeyRecorderView.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/KeyRecorderView.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/KeyRecorderView.o"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/Views/Components/Theme.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/Theme.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/Theme.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/Theme.o"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/Views/ContentView.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ContentView.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ContentView.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/ContentView.o"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/Views/LibraryView.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/LibraryView.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/LibraryView.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/LibraryView.o"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/Views/OnboardingView.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/OnboardingView.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/OnboardingView.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/OnboardingView.o"
+  },
+  "/Users/joshclark/Projects/Clippy/Clippy/Views/SettingsView.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/SettingsView.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/SettingsView.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/SettingsView.o"
+  },
+  "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "index-unit-output-path" : "/Clippy.build/Release/Clippy.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "llvm-bc" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/GeneratedAssetSymbols.bc",
+    "object" : "/Users/joshclark/Projects/Clippy/build/DerivedData/Build/Intermediates.noindex/Clippy.build/Release/Clippy.build/Objects-normal/arm64/GeneratedAssetSymbols.o"
+  }
+}
