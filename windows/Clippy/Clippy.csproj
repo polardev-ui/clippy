@@ -8,8 +8,14 @@
     <Platforms>x64;ARM64</Platforms>
     <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
     <UseWinUI>true</UseWinUI>
-    <!-- The UI is built entirely in code; there is no XAML markup to compile. -->
-    <EnableMsixTooling>false</EnableMsixTooling>
+    <!--
+      Must be true (or absent). The Windows App SDK imports its own MSIX/PRI build tooling
+      only when this is 'true' or empty; setting it to 'false' matches neither import
+      condition, so the build falls through to Visual Studio's tooling, which is not present
+      under "dotnet publish" and fails with MSB4062.
+      This is unrelated to packaging — the app stays unpackaged via WindowsPackageType=None.
+    -->
+    <EnableMsixTooling>true</EnableMsixTooling>
     <WindowsPackageType>None</WindowsPackageType>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -20,30 +26,6 @@
     <ApplicationIcon>Assets\clippy-icon.ico</ApplicationIcon>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <SelfContained>true</SelfContained>
-  </PropertyGroup>
-
-  <!--
-    The Windows App SDK looks for the PRI/Appx build tasks under
-    $(MSBuildExtensionsPath)\Microsoft\VisualStudio\v$(VisualStudioVersion)\AppxPackage\.
-    .NET SDK 10.0.400 reports VisualStudioVersion as 18.0 but still ships those tasks in the
-    v17.0 folder, so the default path does not exist and PRI generation fails with MSB4062.
-    Probe the known locations and only override when the default is genuinely missing.
-  -->
-  <PropertyGroup>
-    <_AppxToolsDefault>$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v$(VisualStudioVersion)\AppxPackage\</_AppxToolsDefault>
-    <_AppxToolsV17>$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v17.0\AppxPackage\</_AppxToolsV17>
-    <_AppxToolsV18>$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v18.0\AppxPackage\</_AppxToolsV18>
-    <_AppxToolsProbe>Microsoft.Build.Packaging.Pri.Tasks.dll</_AppxToolsProbe>
-
-    <AppxMSBuildToolsPath
-      Condition="'$(AppxMSBuildToolsPath)' == ''
-                 And !Exists('$(_AppxToolsDefault)$(_AppxToolsProbe)')
-                 And Exists('$(_AppxToolsV17)$(_AppxToolsProbe)')">$(_AppxToolsV17)</AppxMSBuildToolsPath>
-
-    <AppxMSBuildToolsPath
-      Condition="'$(AppxMSBuildToolsPath)' == ''
-                 And !Exists('$(_AppxToolsDefault)$(_AppxToolsProbe)')
-                 And Exists('$(_AppxToolsV18)$(_AppxToolsProbe)')">$(_AppxToolsV18)</AppxMSBuildToolsPath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -57,5 +39,9 @@
     <Content Include="Assets\**">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true'">
+    <ProjectCapability Include="Msix" />
   </ItemGroup>
 </Project>
