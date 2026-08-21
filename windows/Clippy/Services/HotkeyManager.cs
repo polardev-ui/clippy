@@ -13,8 +13,11 @@ public sealed class HotkeyManager : IDisposable
 
     public Action? OnTrigger { get; set; }
 
+    private const uint ModNoRepeat = 0x4000;
+
     private nint _windowHandle;
     private bool _registered;
+    private HotkeyBinding? _current;
 
     private HotkeyManager()
     {
@@ -25,21 +28,45 @@ public sealed class HotkeyManager : IDisposable
         _windowHandle = hwnd;
     }
 
-    public void Register(HotkeyBinding binding)
+    /// <summary>
+    /// Registers <paramref name="binding"/> as the global hotkey. Returns false if Windows
+    /// refused it, which normally means another application already owns that combination.
+    /// </summary>
+    public bool Register(HotkeyBinding binding)
     {
-        if (_windowHandle == nint.Zero) return;
+        if (_windowHandle == nint.Zero) return false;
 
-        if (_registered)
-        {
-            UnregisterHotKey(_windowHandle, HotkeyId);
-            _registered = false;
-        }
+        Unregister();
 
-        var mods = MapModifiers(binding.Modifiers);
+        // MOD_NOREPEAT: holding the key down should clip once, not once per repeat.
+        var mods = MapModifiers(binding.Modifiers) | ModNoRepeat;
         if (RegisterHotKey(_windowHandle, HotkeyId, mods, binding.VirtualKey))
         {
             _registered = true;
+            _current = binding;
+            return true;
         }
+
+        var error = Marshal.GetLastWin32Error();
+        ClippyDebugLog.Instance.Log("Hotkey",
+            $"Could not register {binding.DisplayString} (error {error}) — another app may already use it");
+
+        // Fall back to whatever was working before, so the app is never left with no hotkey.
+        if (_current != null && !ReferenceEquals(_current, binding))
+        {
+            var previous = _current;
+            _current = null;
+            Register(previous);
+        }
+
+        return false;
+    }
+
+    public void Unregister()
+    {
+        if (!_registered || _windowHandle == nint.Zero) return;
+        UnregisterHotKey(_windowHandle, HotkeyId);
+        _registered = false;
     }
 
     public bool ProcessMessage(uint msg, nint wParam)
@@ -64,14 +91,7 @@ public sealed class HotkeyManager : IDisposable
         return result;
     }
 
-    public void Dispose()
-    {
-        if (_registered && _windowHandle != nint.Zero)
-        {
-            UnregisterHotKey(_windowHandle, HotkeyId);
-            _registered = false;
-        }
-    }
+    public void Dispose() => Unregister();
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool RegisterHotKey(nint hWnd, int id, uint fsModifiers, uint vk);

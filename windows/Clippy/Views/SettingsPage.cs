@@ -203,47 +203,7 @@ public sealed class SettingsPage : UserControl
         return combo;
     }
 
-    private UIElement CreateHotkeyPanel()
-    {
-        var settings = AppSettings.Instance;
-        var label = new TextBlock
-        {
-            Text = settings.Hotkey.DisplayString,
-            FontFamily = new FontFamily("Consolas"),
-            FontSize = 24,
-            FontWeight = Microsoft.UI.Text.FontWeights.Bold
-        };
-
-        var reset = new Button
-        {
-            Content = "Reset to Ctrl+K",
-            Margin = new Thickness(0, 8, 0, 0)
-        };
-        reset.Click += (_, _) =>
-        {
-            AppSettings.Instance.Hotkey = HotkeyBinding.Default;
-            AppSettings.Instance.Persist();
-            label.Text = AppSettings.Instance.Hotkey.DisplayString;
-            AppCoordinator.Instance.RefreshHotkey();
-        };
-
-        return new StackPanel
-        {
-            Spacing = 8,
-            Children =
-            {
-                new TextBlock
-                {
-                    Text = "Default shortcut is Ctrl+K. Custom key capture coming soon on Windows.",
-                    FontSize = 12,
-                    TextWrapping = TextWrapping.WrapWholeWords,
-                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(140, 255, 255, 255))
-                },
-                label,
-                reset
-            }
-        };
-    }
+    private UIElement CreateHotkeyPanel() => new HotkeyRecorder();
 
     private UIElement CreateAudioPanel()
     {

@@ -56,6 +56,11 @@ Clips are stored in `~/Library/Application Support/Clippy/Clips/`.
 - **Carbon hotkeys** — system-wide shortcut registration
 - **Speech framework** — on-device voice trigger detection when available
 
+## Windows
+
+A native Windows port lives in [`windows/`](windows/README.md), with installers for **x64**
+and **ARM64**. See that README for build and install instructions.
+
 ## License
 
 MIT

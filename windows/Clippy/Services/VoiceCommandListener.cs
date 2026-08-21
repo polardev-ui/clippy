@@ -106,9 +106,14 @@ public sealed class VoiceCommandListener
 
             _recognizer = new SpeechRecognizer();
 
+            // Deliberately no bare "Clippy" entry — a wake word on its own is not a command,
+            // and listing it makes the recogniser emit it constantly.
             var grammar = new SpeechRecognitionListConstraint(new[]
             {
-                "Clippy",
+                "Clippy clip that",
+                "Clippy clip this",
+                "Clippy clip it",
+                "Clippy do your thing",
                 "clip that",
                 "clip this",
                 "clip it",
@@ -217,8 +222,10 @@ public sealed class VoiceCommandListener
             ClippyDebugLog.Instance.Log("Voice", $"Heard: \"{text}\"");
         }
 
-        if (args.Result.Confidence == SpeechRecognitionConfidence.High ||
-            MatchesTrigger(text))
+        // Confidence alone is not enough to act on. The grammar contains the bare wake word,
+        // so a high-confidence match fires on someone simply saying "Clippy" mid-sentence —
+        // the phrase itself has to be a clip command.
+        if (MatchesTrigger(text))
         {
             if (_hasTriggeredThisUtterance) return;
             _hasTriggeredThisUtterance = true;
@@ -253,7 +260,11 @@ public sealed class VoiceCommandListener
             {
                 StreamingCaptureMode = StreamingCaptureMode.Audio
             };
-            var capture = new MediaCapture();
+
+            // Must be disposed: an undisposed MediaCapture holds the microphone open for
+            // the life of the process, which starves both the recogniser and the mic track
+            // in recorded clips.
+            using var capture = new MediaCapture();
             await capture.InitializeAsync(settings);
             return true;
         }
@@ -275,14 +286,22 @@ public sealed class VoiceCommandListener
             || message.Contains("0x80045509", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// True when <paramref name="text"/> is an actual clip command.
+    /// </summary>
+    /// <remarks>
+    /// A wake word by itself does not qualify. "Clippy" contains "clip", so a naive
+    /// substring test treats someone merely saying the app's name as a command — the
+    /// phrase needs a wake word plus a separate intent word, or a complete stock phrase.
+    /// </remarks>
     public static bool MatchesTrigger(string text)
     {
-        var normalized = text.ToLowerInvariant()
+        var words = text.ToLowerInvariant()
             .Replace(",", " ")
             .Replace(".", " ")
             .Replace("'", "")
             .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var joined = string.Join(' ', normalized);
+        var joined = string.Join(' ', words);
 
         string[] explicitPhrases =
         {
@@ -292,7 +311,7 @@ public sealed class VoiceCommandListener
             "clip this",
             "clip it",
             "clippy clip",
-            "clippy do"
+            "clippy do your"
         };
 
         if (explicitPhrases.Any(joined.Contains))
@@ -300,10 +319,30 @@ public sealed class VoiceCommandListener
             return true;
         }
 
-        var hasWake = joined.Contains("clipp") || joined.Contains("clippy") || joined.Contains("clipty");
-        var hasClipIntent = joined.Contains("clip") || joined.Contains("thing");
-        return hasWake && hasClipIntent;
+        string[] intentWords = { "clip", "clips", "that", "this", "it", "thing", "thang" };
+
+        var hasWake = false;
+        var hasIntent = false;
+        foreach (var word in words)
+        {
+            if (!hasWake && IsWakeWord(word))
+            {
+                hasWake = true;
+                continue; // The wake word cannot double as its own intent word.
+            }
+
+            if (intentWords.Contains(word))
+            {
+                hasIntent = true;
+            }
+        }
+
+        return hasWake && hasIntent;
     }
+
+    private static bool IsWakeWord(string word) =>
+        word.StartsWith("clipp", StringComparison.Ordinal) ||
+        word.StartsWith("clipty", StringComparison.Ordinal);
 
     private void NotifyStateChanged() => StateChanged?.Invoke();
 }
