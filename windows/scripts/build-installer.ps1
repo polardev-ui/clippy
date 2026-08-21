@@ -60,12 +60,58 @@ if (-not $hasDotNet10) {
 
 New-Item -ItemType Directory -Force -Path $BuildDir | Out-Null
 
+Write-Host "> Locating Windows App SDK PRI build tasks"
+Set-AppxMSBuildToolsPath
+
 function Get-HostArchitecture {
     switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture) {
         'Arm64' { return 'arm64' }
         'X64'   { return 'x64' }
         default { return 'other' }
     }
+}
+
+# The Windows App SDK's PRI generation loads build tasks from a VisualStudioVersion-derived
+# path. .NET SDK 10.0.400 reports 18.0 while shipping those tasks under v17.0, so the default
+# path can be missing and the publish fails with MSB4062. Locate the tasks and hand the
+# directory to MSBuild, which reads it from the environment as a property.
+function Set-AppxMSBuildToolsPath {
+    if ($env:AppxMSBuildToolsPath) {
+        Write-Host "  AppxMSBuildToolsPath already set: $env:AppxMSBuildToolsPath"
+        return
+    }
+
+    $sdkLine = dotnet --list-sdks | Select-String '^\s*10\.' | Select-Object -Last 1
+    if (-not $sdkLine -or $sdkLine.ToString() -notmatch '^\s*(\S+)\s+\[(.+?)\]\s*$') {
+        Write-Host "  Could not determine the .NET SDK path; leaving PRI tooling at its default" -ForegroundColor Yellow
+        return
+    }
+
+    $sdkDir = Join-Path $Matches[2] $Matches[1]
+    $vsDir = Join-Path $sdkDir "Microsoft\VisualStudio"
+    if (-not (Test-Path $vsDir)) {
+        Write-Host "  No MSBuild VisualStudio directory under $sdkDir" -ForegroundColor Yellow
+        return
+    }
+
+    $candidates = Get-ChildItem $vsDir -Directory -Filter 'v*' -ErrorAction SilentlyContinue |
+        ForEach-Object { Join-Path $_.FullName "AppxPackage" } |
+        Where-Object { Test-Path (Join-Path $_ "Microsoft.Build.Packaging.Pri.Tasks.dll") }
+
+    Write-Host "  PRI tooling candidates under ${vsDir}:"
+    if (-not $candidates) {
+        Get-ChildItem $vsDir -Directory -ErrorAction SilentlyContinue |
+            ForEach-Object { Write-Host "    $($_.Name) (no AppxPackage tasks)" }
+        Write-Host "  Could not find Microsoft.Build.Packaging.Pri.Tasks.dll." -ForegroundColor Yellow
+        Write-Host "  If publish fails with MSB4062, this is why." -ForegroundColor Yellow
+        return
+    }
+
+    foreach ($candidate in $candidates) { Write-Host "    $candidate" }
+
+    $chosen = $candidates | Sort-Object -Descending | Select-Object -First 1
+    $env:AppxMSBuildToolsPath = "$chosen\"
+    Write-Host "  Using PRI tooling: $env:AppxMSBuildToolsPath"
 }
 
 function Install-BundledFfmpeg {
