@@ -75,10 +75,40 @@ public sealed class HotkeyBinding
         0x08 => "Backspace",
         0x09 => "Tab",
         0x0D => "Enter",
+        0x13 => "Pause",
         0x1B => "Esc",
         0x20 => "Space",
-        >= 0x41 and <= 0x5A => ((char)vk).ToString(),
+        0x21 => "PgUp",
+        0x22 => "PgDn",
+        0x23 => "End",
+        0x24 => "Home",
+        0x25 => "Left",
+        0x26 => "Up",
+        0x27 => "Right",
+        0x28 => "Down",
+        0x2C => "PrtSc",
+        0x2D => "Insert",
+        0x2E => "Delete",
         >= 0x30 and <= 0x39 => ((char)vk).ToString(),
+        >= 0x41 and <= 0x5A => ((char)vk).ToString(),
+        >= 0x60 and <= 0x69 => $"Num{vk - 0x60}",
+        0x6A => "Num*",
+        0x6B => "Num+",
+        0x6D => "Num-",
+        0x6E => "Num.",
+        0x6F => "Num/",
+        >= 0x70 and <= 0x87 => $"F{vk - 0x6F}",
+        0xBA => ";",
+        0xBB => "=",
+        0xBC => ",",
+        0xBD => "-",
+        0xBE => ".",
+        0xBF => "/",
+        0xC0 => "`",
+        0xDB => "[",
+        0xDC => "\\",
+        0xDD => "]",
+        0xDE => "'",
         _ => $"Key {vk}"
     };
 }
@@ -170,9 +200,67 @@ public sealed class AudioDevice
 public sealed class RecordingSegment
 {
     public required string Path { get; init; }
+
+    /// <summary>Position in the rolling buffer; segments concatenate in index order.</summary>
+    public int Index { get; init; }
+
     public DateTime StartTime { get; init; }
+
+    /// <summary>Nominal length. Zero for the segment FFmpeg is still writing.</summary>
     public double Duration { get; init; }
-    public int FrameCount { get; init; }
+
+    /// <summary>False for the in-progress segment, which is still readable but not full length.</summary>
+    public bool IsComplete { get; init; }
+}
+
+/// <summary>Everything the recorder needs to start a capture, resolved from user settings.</summary>
+public sealed class CaptureSettings
+{
+    public int OffsetX { get; init; }
+    public int OffsetY { get; init; }
+
+    /// <summary>Native display size — what gdigrab actually grabs.</summary>
+    public int SourceWidth { get; init; }
+    public int SourceHeight { get; init; }
+
+    /// <summary>Encoded size after scaling, from the chosen quality setting.</summary>
+    public int Width { get; init; }
+    public int Height { get; init; }
+
+    public int FrameRate { get; init; } = 30;
+    public int VideoBitrate { get; init; } = 2_000_000;
+    public bool CaptureMicrophone { get; init; } = true;
+    public string? MicrophoneDeviceId { get; init; }
+    public string? OutputDeviceId { get; init; }
+
+    public static CaptureSettings FromAppSettings(CaptureDisplay display)
+    {
+        var settings = AppSettings.Instance;
+        var (width, height) = CaptureResolutionExtensions.DimensionsFor(
+            settings.CaptureResolution, display.Width, display.Height);
+
+        return new CaptureSettings
+        {
+            OffsetX = display.OffsetX,
+            OffsetY = display.OffsetY,
+            SourceWidth = EvenDimension(display.Width),
+            SourceHeight = EvenDimension(display.Height),
+            Width = width,
+            Height = height,
+            FrameRate = (int)settings.CaptureFrameRate,
+            VideoBitrate = settings.CaptureResolution.VideoBitrate(),
+            CaptureMicrophone = true,
+            MicrophoneDeviceId = string.IsNullOrEmpty(settings.PreferredMicrophoneId)
+                ? null
+                : settings.PreferredMicrophoneId,
+            OutputDeviceId = string.IsNullOrEmpty(settings.PreferredAudioOutputId)
+                ? null
+                : settings.PreferredAudioOutputId
+        };
+    }
+
+    // libx264's yuv420p needs even dimensions in both axes.
+    private static int EvenDimension(int value) => Math.Max(2, value & ~1);
 }
 
 public sealed class ClipExportResult

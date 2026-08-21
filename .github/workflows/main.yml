@@ -6,7 +6,7 @@ on:
     branches: [main, master]
     paths:
       - "windows/**"
-      - ".github/workflows/windows-installer.yml"
+      - ".github/workflows/main.yml"
 
 permissions:
   contents: read
@@ -14,6 +14,11 @@ permissions:
 jobs:
   build-installer:
     runs-on: windows-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
 
     steps:
       - name: Checkout
@@ -24,27 +29,33 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
-
       - name: Show toolchain
         shell: pwsh
         run: |
           dotnet --info
           dotnet --list-sdks
 
+      - name: Cache FFmpeg download
+        uses: actions/cache@v4
+        with:
+          path: windows/build/ffmpeg-cache
+          key: ffmpeg-n8.1-${{ matrix.arch }}
+
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
 
-      - name: Build installer
+      - name: Build installer (${{ matrix.arch }})
         shell: pwsh
-        run: ./windows/scripts/build-installer.ps1
+        env:
+          WINDOWS_SIGN_CERT_BASE64: ${{ secrets.WINDOWS_SIGN_CERT_BASE64 }}
+          WINDOWS_SIGN_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGN_CERT_PASSWORD }}
+        run: ./windows/scripts/build-installer.ps1 -Architecture ${{ matrix.arch }}
 
-      - name: Upload ClippySetup.exe
+      - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
-          name: ClippySetup-win-x64
-          path: windows/build/ClippySetup.exe
+          name: ClippySetup-${{ matrix.arch }}
+          path: windows/build/ClippySetup-${{ matrix.arch }}.exe
           if-no-files-found: error
           retention-days: 30
 
@@ -52,8 +63,8 @@ jobs:
         uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: Clippy-portable-win-x64
-          path: windows/build/Clippy-win-x64.zip
+          name: Clippy-portable-${{ matrix.arch }}
+          path: windows/build/Clippy-win-${{ matrix.arch }}.zip
           if-no-files-found: ignore
           retention-days: 30
 
@@ -61,12 +72,12 @@ jobs:
         if: success()
         shell: pwsh
         run: |
-          $setup = Get-Item "windows/build/ClippySetup.exe"
+          $setup = Get-Item "windows/build/ClippySetup-${{ matrix.arch }}.exe"
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value @"
-          ## Clippy Windows installer built
+          ## Clippy Windows installer (${{ matrix.arch }})
 
-          - **File:** ClippySetup.exe
+          - **File:** ClippySetup-${{ matrix.arch }}.exe
           - **Size:** $([math]::Round($setup.Length / 1MB, 2)) MB
 
-          Download it from this workflow run under **Artifacts** -> **ClippySetup-win-x64**.
+          Download it from this run under **Artifacts** -> **ClippySetup-${{ matrix.arch }}**.
           "@

@@ -7,10 +7,20 @@ public sealed class SoundPlayer
     private static SoundPlayer? _instance;
     public static SoundPlayer Instance => _instance ??= new SoundPlayer();
 
+    /// <summary>
+    /// Fires and forgets. Playback runs off the UI thread — this is triggered from the
+    /// global hotkey, which arrives on the window procedure, and blocking there would
+    /// freeze the window for the length of the sound.
+    /// </summary>
     public void PlayClipSound()
     {
         if (!AppSettings.Instance.SoundEnabled) return;
 
+        _ = Task.Run(PlayBlocking);
+    }
+
+    private static void PlayBlocking()
+    {
         try
         {
             var path = Path.Combine(AppContext.BaseDirectory, "Assets", "clip.wav");

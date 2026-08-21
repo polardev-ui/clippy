@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.Text;
 using Clippy.Models;
 
@@ -20,7 +19,17 @@ public sealed class ClippyDebugLog
     private static ClippyDebugLog? _instance;
     public static ClippyDebugLog Instance => _instance ??= new ClippyDebugLog();
 
-    public ObservableCollection<DebugLogEntry> Entries { get; } = new();
+    // A plain guarded list rather than an ObservableCollection: entries arrive from the
+    // capture, audio and voice threads, while the settings panel walks the list on the UI
+    // thread. Handing out snapshots removes the thread affinity problem outright.
+    private readonly List<DebugLogEntry> _entries = new();
+    private readonly object _gate = new();
+
+    /// <summary>Newest first.</summary>
+    public IReadOnlyList<DebugLogEntry> Entries
+    {
+        get { lock (_gate) { return _entries.ToArray(); } }
+    }
 
     public void Log(string category, string message)
     {
@@ -31,14 +40,20 @@ public sealed class ClippyDebugLog
             Message = message
         };
 
-        Entries.Insert(0, entry);
-        while (Entries.Count > MaxEntries)
+        lock (_gate)
         {
-            Entries.RemoveAt(Entries.Count - 1);
+            _entries.Insert(0, entry);
+            if (_entries.Count > MaxEntries)
+            {
+                _entries.RemoveRange(MaxEntries, _entries.Count - MaxEntries);
+            }
         }
 
         System.Diagnostics.Debug.WriteLine(entry.Formatted);
+        Changed?.Invoke();
     }
+
+    public event Action? Changed;
 
     public void LogError(string category, Exception error, string context = "")
     {
@@ -51,7 +66,15 @@ public sealed class ClippyDebugLog
     public string ExportText =>
         string.Join(Environment.NewLine, Entries.Select(e => e.Formatted));
 
-    public void Clear() => Entries.Clear();
+    public void Clear()
+    {
+        lock (_gate)
+        {
+            _entries.Clear();
+        }
+
+        Changed?.Invoke();
+    }
 }
 
 public static class RecorderDiagnostics

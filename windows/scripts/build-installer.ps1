@@ -1,26 +1,49 @@
 #Requires -Version 5.1
+<#
+.SYNOPSIS
+    Builds Clippy for Windows and produces an installer per architecture.
+
+.PARAMETER Architecture
+    x64, arm64, or both (default). Both architectures can be built from either kind of
+    host — cross-publishing is a normal .NET operation.
+
+.PARAMETER SkipInstaller
+    Publish and bundle FFmpeg, but stop before Inno Setup.
+#>
+param(
+    [ValidateSet('x64', 'arm64', 'both')]
+    [string]$Architecture = 'both',
+    [switch]$SkipInstaller
+)
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $Root = Split-Path -Parent $PSScriptRoot
 $Project = Join-Path $Root "Clippy\Clippy.csproj"
 $BuildDir = Join-Path $Root "build"
-$PublishDir = Join-Path $BuildDir "publish"
 $IssFile = Join-Path $Root "installer\Clippy.iss"
 $NuGetConfig = Join-Path $Root "nuget.config"
+$RepoRoot = Split-Path -Parent $Root
 
-Write-Host "> Clippy Windows installer build" -ForegroundColor Cyan
-Write-Host "  Root: $Root"
+# Both architectures come from the same FFmpeg release so the two builds stay in step.
+$FfmpegRelease = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest"
+$FfmpegAssets = @{
+    "x64"   = "ffmpeg-n8.1-latest-win64-gpl-8.1.zip"
+    "arm64" = "ffmpeg-n8.1-latest-winarm64-gpl-8.1.zip"
+}
+
+$Architectures = if ($Architecture -eq 'both') { @('x64', 'arm64') } else { @($Architecture) }
+
+Write-Host "> Clippy Windows build" -ForegroundColor Cyan
+Write-Host "  Root:           $Root"
+Write-Host "  Architectures:  $($Architectures -join ', ')"
 
 if (-not (Test-Path $Project)) {
     throw "Project not found: $Project"
 }
 
-$RepoRoot = Split-Path -Parent $Root
 & (Join-Path $PSScriptRoot "prepare-assets.ps1") -WindowsRoot $Root -RepoRoot $RepoRoot
-
-Write-Host "> dotnet --info"
-dotnet --info
 
 Write-Host "> Installed SDKs:"
 $installedSdks = dotnet --list-sdks
@@ -30,237 +53,227 @@ $hasDotNet10 = @($installedSdks | Select-String -Pattern '^\s*10\.' -Quiet) -con
 if (-not $hasDotNet10) {
     Write-Host ""
     Write-Host "ERROR: .NET 10 SDK not found." -ForegroundColor Red
-    Write-Host "This project targets net10.0-windows. Install .NET 10 SDK:" -ForegroundColor Yellow
+    Write-Host "This project targets net10.0-windows. Install it from:" -ForegroundColor Yellow
     Write-Host "  https://dotnet.microsoft.com/download/dotnet/10.0"
     throw "Missing .NET 10 SDK"
 }
 
-Write-Host "> Restoring NuGet packages"
-$restoreArgs = @(
-    "restore", $Project,
-    "-r", "win-x64",
-    "--force-evaluate"
-)
-if (Test-Path $NuGetConfig) {
-    $restoreArgs += @("--configfile", $NuGetConfig)
-}
+New-Item -ItemType Directory -Force -Path $BuildDir | Out-Null
 
-Push-Location $Root
-try {
-    & dotnet @restoreArgs
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host ""
-        Write-Host "NuGet restore failed. Common fixes:" -ForegroundColor Yellow
-        Write-Host "  1. Install .NET 10 SDK: https://dotnet.microsoft.com/download/dotnet/10.0"
-        Write-Host "  2. Ensure internet access to https://api.nuget.org"
-        Write-Host "  3. Run: dotnet nuget list source"
-        Write-Host "  4. Install Visual Studio 2022 with 'Windows application development' workload"
-        throw "dotnet restore failed with exit code $LASTEXITCODE"
+function Get-HostArchitecture {
+    switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture) {
+        'Arm64' { return 'arm64' }
+        'X64'   { return 'x64' }
+        default { return 'other' }
     }
-
-    Write-Host "> dotnet publish (Release, win-x64, self-contained)"
-    if (Test-Path $PublishDir) {
-        Remove-Item $PublishDir -Recurse -Force
-    }
-
-    $publishArgs = @(
-        "publish", $Project,
-        "-c", "Release",
-        "-r", "win-x64",
-        "--self-contained", "true",
-        "-p:PublishReadyToRun=true",
-        "-p:WindowsAppSDKSelfContained=true",
-        "-o", $PublishDir
-    )
-    if (Test-Path $NuGetConfig) {
-        $publishArgs += @("--configfile", $NuGetConfig)
-    }
-
-    & dotnet @publishArgs
-    if ($LASTEXITCODE -ne 0) {
-        throw "dotnet publish failed with exit code $LASTEXITCODE"
-    }
-}
-finally {
-    Pop-Location
-}
-
-$exe = Join-Path $PublishDir "Clippy.exe"
-if (-not (Test-Path $exe)) {
-    throw "Clippy.exe not found in publish output: $PublishDir"
-}
-
-Write-Host "> Bundling FFmpeg (full build with WASAPI)"
-$ffmpegCache = Join-Path $BuildDir "ffmpeg-cache"
-$ffmpegMarker = Join-Path $ffmpegCache "full-build-verified"
-$ffmpegExtract = Join-Path $ffmpegCache "extract"
-$ffmpegDest = Join-Path $PublishDir "ffmpeg.exe"
-New-Item -ItemType Directory -Force -Path $ffmpegCache | Out-Null
-
-function Get-SevenZip {
-    $paths = @(
-        "${env:ProgramFiles}\7-Zip\7z.exe",
-        "${env:ProgramFiles(x86)}\7-Zip\7z.exe"
-    )
-    return $paths | Where-Object { Test-Path $_ } | Select-Object -First 1
-}
-
-function Get-FfmpegOutput([string]$ffmpegPath, [string[]]$arguments) {
-    return @(& $ffmpegPath @arguments 2>&1 | ForEach-Object {
-        if ($_ -is [System.Management.Automation.ErrorRecord]) { $_.ToString() } else { "$_" }
-    }) -join "`n"
-}
-
-function Test-FfmpegWasapi([string]$ffmpegPath) {
-    $listDevicesExit = & $ffmpegPath -hide_banner -f wasapi -list_devices true -i dummy 2>&1
-    if ($LASTEXITCODE -eq 0) {
-        return $true
-    }
-
-    foreach ($flag in @('-devices', '-formats')) {
-        $output = Get-FfmpegOutput $ffmpegPath @('-hide_banner', $flag)
-        if ($output -match 'wasapi') {
-            return $true
-        }
-    }
-
-    $help = Get-FfmpegOutput $ffmpegPath @('-hide_banner', '-h', 'demuxer=wasapi')
-    return ($help -match 'wasapi' -and $help -notmatch 'Unknown demuxer')
 }
 
 function Install-BundledFfmpeg {
-    if (Test-Path $ffmpegExtract) {
-        Remove-Item $ffmpegExtract -Recurse -Force
-    }
+    param(
+        [Parameter(Mandatory)][string]$Arch,
+        [Parameter(Mandatory)][string]$Destination
+    )
 
-    $sevenZip = Get-SevenZip
-    $ffmpegUrl = "https://github.com/GyanD/codexffmpeg/releases/download/8.1.1/ffmpeg-8.1.1-full_build.7z"
-    $ffmpegArchive = Join-Path $ffmpegCache "ffmpeg-full.7z"
-    $ffmpegZipUrl = "https://github.com/GyanD/codexffmpeg/releases/download/8.1.1/ffmpeg-8.1.1-full_build.zip"
-    $ffmpegZip = Join-Path $ffmpegCache "ffmpeg-full.zip"
+    $cacheDir = Join-Path $BuildDir "ffmpeg-cache\$Arch"
+    New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
 
-    if ($sevenZip) {
-        if (-not (Test-Path $ffmpegArchive)) {
-            Write-Host "  Downloading FFmpeg full build (.7z)..."
-            Invoke-WebRequest -Uri $ffmpegUrl -OutFile $ffmpegArchive
+    $assetName = $FfmpegAssets[$Arch]
+    $archive = Join-Path $cacheDir $assetName
+    $extract = Join-Path $cacheDir "extract"
+
+    if (-not (Test-Path $archive)) {
+        Write-Host "  Downloading FFmpeg for $Arch ($assetName)..."
+        $previous = $ProgressPreference
+        $ProgressPreference = 'SilentlyContinue'
+        try {
+            Invoke-WebRequest -Uri "$FfmpegRelease/$assetName" -OutFile $archive -UseBasicParsing
         }
-
-        Write-Host "  Extracting FFmpeg..."
-        & $sevenZip x $ffmpegArchive "-o$ffmpegExtract" -y
-        if ($LASTEXITCODE -ne 0) {
-            throw "7-Zip extraction failed with exit code $LASTEXITCODE"
+        finally {
+            $ProgressPreference = $previous
         }
     }
     else {
-        if (-not (Test-Path $ffmpegZip)) {
-            Write-Host "  Downloading FFmpeg full build (.zip)..."
-            Invoke-WebRequest -Uri $ffmpegZipUrl -OutFile $ffmpegZip
-        }
-
-        Write-Host "  Extracting FFmpeg..."
-        Expand-Archive -Path $ffmpegZip -DestinationPath $ffmpegExtract -Force
+        Write-Host "  Using cached FFmpeg archive for $Arch"
     }
 
-    $ffmpegSource = Get-ChildItem -Path (Join-Path $ffmpegExtract "bin") -Filter ffmpeg.exe -ErrorAction SilentlyContinue |
+    if (Test-Path $extract) {
+        Remove-Item $extract -Recurse -Force
+    }
+
+    Expand-Archive -Path $archive -DestinationPath $extract -Force
+
+    $source = Get-ChildItem -Path $extract -Filter ffmpeg.exe -Recurse | Select-Object -First 1
+    if (-not $source) {
+        throw "ffmpeg.exe not found inside $assetName"
+    }
+
+    Copy-Item $source.FullName $Destination -Force
+    Write-Host "  Bundled ffmpeg.exe ($([math]::Round((Get-Item $Destination).Length / 1MB, 1)) MB)"
+
+    # An FFmpeg built for another architecture cannot be executed here, so only the
+    # matching one gets a capability check.
+    if ($Arch -eq (Get-HostArchitecture)) {
+        $encoders = & $Destination -hide_banner -encoders 2>&1 | Out-String
+        if ($encoders -notmatch 'libx264') {
+            throw "Bundled FFmpeg for $Arch has no libx264 encoder — video capture would not work"
+        }
+
+        $formats = & $Destination -hide_banner -devices 2>&1 | Out-String
+        if ($formats -notmatch 'gdigrab') {
+            throw "Bundled FFmpeg for $Arch has no gdigrab input — screen capture would not work"
+        }
+
+        Write-Host "  Verified: libx264 + gdigrab present"
+    }
+    else {
+        Write-Host "  Skipped capability probe (cannot run $Arch binaries on this host)"
+    }
+}
+
+function Invoke-CodeSigning {
+    param([Parameter(Mandatory)][string[]]$Paths)
+
+    if (-not $env:WINDOWS_SIGN_CERT_BASE64 -or -not $env:WINDOWS_SIGN_CERT_PASSWORD) {
+        return
+    }
+
+    $signtool = Get-ChildItem -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse -ErrorAction SilentlyContinue |
+        Sort-Object FullName -Descending |
         Select-Object -First 1
-    if (-not $ffmpegSource) {
-        $ffmpegSource = Get-ChildItem -Path $ffmpegExtract -Filter ffmpeg.exe -Recurse | Select-Object -First 1
-    }
-    if (-not $ffmpegSource) {
-        throw "ffmpeg.exe not found inside downloaded archive"
+
+    if (-not $signtool) {
+        Write-Host "  signtool.exe not found; skipping signing" -ForegroundColor Yellow
+        return
     }
 
-    Write-Host "  Source: $($ffmpegSource.FullName) ($([math]::Round($ffmpegSource.Length / 1MB, 1)) MB)"
-    Copy-Item $ffmpegSource.FullName $ffmpegDest -Force
-
-    if (-not (Test-FfmpegWasapi $ffmpegDest)) {
-        $devices = Get-FfmpegOutput $ffmpegDest @('-hide_banner', '-devices')
-        $deviceSample = ($devices -split "`n" | Select-String -Pattern 'wasapi|dshow|audio' | Select-Object -First 10)
-        Write-Host "  FFmpeg device probe:"
-        if ($deviceSample) {
-            $deviceSample | ForEach-Object { Write-Host "    $_" }
+    $pfxPath = Join-Path $BuildDir "sign-cert.pfx"
+    [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_SIGN_CERT_BASE64))
+    try {
+        foreach ($path in $Paths) {
+            if (Test-Path $path) {
+                & $signtool.FullName sign /f $pfxPath /p $env:WINDOWS_SIGN_CERT_PASSWORD `
+                    /tr http://timestamp.digicert.com /td sha256 /fd sha256 $path
+                Write-Host "  Signed $(Split-Path -Leaf $path)"
+            }
         }
-        else {
-            ($devices -split "`n" | Select-Object -First 15) | ForEach-Object { Write-Host "    $_" }
-        }
-        throw "Bundled FFmpeg does not include WASAPI input — audio capture will not work"
     }
-
-    New-Item -ItemType File -Force -Path $ffmpegMarker | Out-Null
-}
-
-if (-not (Test-Path $ffmpegDest) -or -not (Test-Path $ffmpegMarker)) {
-    Install-BundledFfmpeg
-}
-else {
-    Write-Host "  Verifying bundled FFmpeg WASAPI support..."
-    if (-not (Test-FfmpegWasapi $ffmpegDest)) {
-        Write-Host "  Existing FFmpeg lacks WASAPI — re-downloading full build..."
-        Remove-Item $ffmpegDest -Force -ErrorAction SilentlyContinue
-        Remove-Item $ffmpegMarker -Force -ErrorAction SilentlyContinue
-        Install-BundledFfmpeg
+    finally {
+        Remove-Item $pfxPath -Force -ErrorAction SilentlyContinue
     }
 }
-
-Write-Host "  Bundled: $ffmpegDest ($([math]::Round((Get-Item $ffmpegDest).Length / 1MB, 1)) MB)"
-
-Write-Host "> Published: $exe"
-
-New-Item -ItemType Directory -Force -Path $BuildDir | Out-Null
 
 $InnoPaths = @(
     "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
-    "${env:ProgramFiles}\Inno Setup 6\ISCC.exe",
-    "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+    "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
 )
-
 $Iscc = $InnoPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
 
-if ($Iscc) {
-    Write-Host "> Building installer with Inno Setup"
-    & $Iscc $IssFile "/DPublishDir=$PublishDir" "/DBuildDir=$BuildDir"
-    if ($LASTEXITCODE -ne 0) {
-        throw "Inno Setup compile failed"
-    }
+$outputs = @()
 
-    $Setup = Join-Path $BuildDir "ClippySetup.exe"
-    if (-not (Test-Path $Setup)) {
-        throw "ClippySetup.exe was not produced"
-    }
+foreach ($arch in $Architectures) {
+    $rid = "win-$arch"
+    $publishDir = Join-Path $BuildDir "publish\$arch"
 
     Write-Host ""
-    Write-Host "OK: Installer ready: $Setup" -ForegroundColor Green
-    Write-Host "  Size: $([math]::Round((Get-Item $Setup).Length / 1MB, 2)) MB"
+    Write-Host "=== $arch ===" -ForegroundColor Cyan
 
-    if ($env:WINDOWS_SIGN_CERT_BASE64 -and $env:WINDOWS_SIGN_CERT_PASSWORD) {
-        Write-Host "> Code signing (optional certificate provided)"
-        $signtool = Get-ChildItem -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse |
-            Sort-Object FullName -Descending |
-            Select-Object -First 1
-        if ($signtool) {
-            $pfxPath = Join-Path $BuildDir "sign-cert.pfx"
-            [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_SIGN_CERT_BASE64))
-            & $signtool.FullName sign /f $pfxPath /p $env:WINDOWS_SIGN_CERT_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 $exe
-            & $signtool.FullName sign /f $pfxPath /p $env:WINDOWS_SIGN_CERT_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 $Setup
-            Remove-Item $pfxPath -Force
-            Write-Host "  Signed Clippy.exe and ClippySetup.exe"
-        }
-        else {
-            Write-Host "  signtool.exe not found; skipping signing" -ForegroundColor Yellow
-        }
+    if (Test-Path $publishDir) {
+        Remove-Item $publishDir -Recurse -Force
     }
 
-    exit 0
+    Push-Location $Root
+    try {
+        Write-Host "> Restoring packages ($rid)"
+        $restoreArgs = @("restore", $Project, "-r", $rid, "--force-evaluate")
+        if (Test-Path $NuGetConfig) { $restoreArgs += @("--configfile", $NuGetConfig) }
+
+        & dotnet @restoreArgs
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host ""
+            Write-Host "NuGet restore failed. Common fixes:" -ForegroundColor Yellow
+            Write-Host "  1. Install .NET 10 SDK: https://dotnet.microsoft.com/download/dotnet/10.0"
+            Write-Host "  2. Ensure internet access to https://api.nuget.org"
+            throw "dotnet restore failed with exit code $LASTEXITCODE"
+        }
+
+        Write-Host "> Publishing (Release, $rid, self-contained)"
+        $publishArgs = @(
+            "publish", $Project,
+            "-c", "Release",
+            "-r", $rid,
+            "-p:Platform=$($arch.ToUpperInvariant())",
+            "--self-contained", "true",
+            "-p:WindowsAppSDKSelfContained=true",
+            "-o", $publishDir
+        )
+
+        # ReadyToRun precompiles to native code, which needs a host that can emit it.
+        if ($arch -eq (Get-HostArchitecture)) {
+            $publishArgs += "-p:PublishReadyToRun=true"
+        }
+
+        if (Test-Path $NuGetConfig) { $publishArgs += @("--configfile", $NuGetConfig) }
+
+        & dotnet @publishArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "dotnet publish failed for $rid with exit code $LASTEXITCODE"
+        }
+    }
+    finally {
+        Pop-Location
+    }
+
+    $exe = Join-Path $publishDir "Clippy.exe"
+    if (-not (Test-Path $exe)) {
+        throw "Clippy.exe not found in publish output: $publishDir"
+    }
+
+    Write-Host "> Bundling FFmpeg"
+    Install-BundledFfmpeg -Arch $arch -Destination (Join-Path $publishDir "ffmpeg.exe")
+
+    Invoke-CodeSigning -Paths @($exe)
+
+    if ($SkipInstaller) {
+        Write-Host "  Skipping installer (-SkipInstaller)"
+        $outputs += [pscustomobject]@{ Arch = $arch; Path = $publishDir; Kind = "publish" }
+        continue
+    }
+
+    if (-not $Iscc) {
+        Write-Host "> Inno Setup not found - creating portable ZIP instead" -ForegroundColor Yellow
+        $zipPath = Join-Path $BuildDir "Clippy-win-$arch.zip"
+        if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+        Compress-Archive -Path (Join-Path $publishDir "*") -DestinationPath $zipPath -Force
+        $outputs += [pscustomobject]@{ Arch = $arch; Path = $zipPath; Kind = "zip" }
+        continue
+    }
+
+    Write-Host "> Building installer with Inno Setup"
+    & $Iscc $IssFile "/DPublishDir=$publishDir" "/DBuildDir=$BuildDir" "/DTargetArch=$arch"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Inno Setup compile failed for $arch"
+    }
+
+    $setup = Join-Path $BuildDir "ClippySetup-$arch.exe"
+    if (-not (Test-Path $setup)) {
+        throw "ClippySetup-$arch.exe was not produced"
+    }
+
+    Invoke-CodeSigning -Paths @($setup)
+    $outputs += [pscustomobject]@{ Arch = $arch; Path = $setup; Kind = "installer" }
 }
 
-Write-Host "> Inno Setup not found - creating portable ZIP instead" -ForegroundColor Yellow
-$ZipPath = Join-Path $BuildDir "Clippy-win-x64.zip"
-if (Test-Path $ZipPath) { Remove-Item $ZipPath -Force }
-Compress-Archive -Path (Join-Path $PublishDir "*") -DestinationPath $ZipPath -Force
+Write-Host ""
+Write-Host "OK: build complete" -ForegroundColor Green
+foreach ($output in $outputs) {
+    $size = if (Test-Path -PathType Leaf $output.Path) {
+        " ($([math]::Round((Get-Item $output.Path).Length / 1MB, 2)) MB)"
+    } else { "" }
+    Write-Host "  [$($output.Arch)] $($output.Kind): $($output.Path)$size"
+}
 
-Write-Host ""
-Write-Host "OK: Portable build ready: $ZipPath" -ForegroundColor Green
-Write-Host "  Install Inno Setup 6 to produce ClippySetup.exe:" -ForegroundColor Yellow
-Write-Host "  https://jrsoftware.org/isdl.php"
-Write-Host ""
-Write-Host "  Then re-run: .\scripts\build-installer.ps1"
+if (-not $Iscc -and -not $SkipInstaller) {
+    Write-Host ""
+    Write-Host "  Install Inno Setup 6 to produce installers instead of ZIPs:" -ForegroundColor Yellow
+    Write-Host "  https://jrsoftware.org/isdl.php"
+}

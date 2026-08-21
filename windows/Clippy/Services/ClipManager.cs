@@ -62,9 +62,14 @@ public sealed class ClipManager
             Title = Clip.DefaultTitle(DateTime.Now)
         };
 
-        Clips.Insert(0, clip);
-        SaveIndex();
-        _ = ClipThumbnailService.GenerateAsync(clip.Id, destination);
+        // Clips are produced on a background thread; the collection belongs to the UI.
+        await UiDispatcher.RunAsync(() =>
+        {
+            Clips.Insert(0, clip);
+            SaveIndex();
+        });
+
+        await ClipThumbnailService.GenerateAsync(clip.Id, destination);
         return clip;
     }
 
@@ -80,9 +85,18 @@ public sealed class ClipManager
 
     public void RenameClip(Clip clip, string title)
     {
-        var existing = Clips.FirstOrDefault(c => c.Id == clip.Id);
-        if (existing == null) return;
-        existing.Title = title;
+        var index = -1;
+        for (var i = 0; i < Clips.Count; i++)
+        {
+            if (Clips[i].Id == clip.Id) { index = i; break; }
+        }
+
+        if (index < 0) return;
+
+        Clips[index].Title = title;
+
+        // Clip has no change notification, so re-seat the item to make the list redraw.
+        Clips[index] = Clips[index];
         SaveIndex();
     }
 
