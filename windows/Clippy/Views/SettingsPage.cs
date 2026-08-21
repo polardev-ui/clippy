@@ -351,6 +351,34 @@ public sealed class SettingsPage : UserControl
             RefreshLog(_logPanel);
         };
 
+        // Startup crashes never reach the in-memory log, so surface the file that does
+        // capture them.
+        var crashLog = new Button { Content = "Open crash log" };
+        crashLog.Click += (_, _) =>
+        {
+            try
+            {
+                if (!File.Exists(CrashLog.Path))
+                {
+                    ClippyDebugLog.Instance.Log("Debug", "No crash log — nothing has crashed.");
+                    RefreshLog(_logPanel);
+                    return;
+                }
+
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "explorer.exe",
+                    Arguments = $"/select,\"{CrashLog.Path}\"",
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                ClippyDebugLog.Instance.LogError("Debug", ex, "open crash log");
+                RefreshLog(_logPanel);
+            }
+        };
+
         RefreshLog(_logPanel);
 
         return new StackPanel
@@ -371,7 +399,7 @@ public sealed class SettingsPage : UserControl
                 {
                     Orientation = Orientation.Horizontal,
                     Spacing = 10,
-                    Children = { refresh, copy, clear }
+                    Children = { refresh, copy, clear, crashLog }
                 },
                 new Border
                 {

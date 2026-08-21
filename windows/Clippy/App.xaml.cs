@@ -10,6 +10,10 @@ public partial class App : Application
 
     public App()
     {
+        // Installed before anything else, so a failure during startup is recorded rather
+        // than disappearing into a stowed exception with no managed stack.
+        CrashLog.Install(this);
+
         InitializeComponent();
     }
 
